@@ -1,0 +1,142 @@
+name: risk-agent-observability
+
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "50m"
+    max-file: "5"
+
+x-restart-policy: &default-restart
+  restart: unless-stopped
+
+networks:
+  telemetry-tier:
+    name: ${TELEMETRY_NETWORK_NAME:-cyber-risk-engine_telemetry-tier}
+    external: true
+  observability-tier:
+    name: ${OBSERVABILITY_NETWORK_NAME:-cyber-risk-observability-tier}
+    driver: bridge
+
+volumes:
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+
+services:
+
+  # Telemetry Aggregator: OpenTelemetry Collector Contrib
+  # Ingests OTLP gRPC/HTTP spans & metrics from FastAPI backend,
+  # processes and exports traces to Jaeger/Tempo and metrics to Prometheus.
+ 
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:${OTEL_COLLECTOR_VERSION:-0.98.0}
+    container_name: security_otel_collector
+    <<: [*default-restart, *default-logging]
+    command:
+      - "--config=/etc/otelcol-contrib/config.yaml"
+    volumes:
+      - ${OTEL_COLLECTOR_CONFIG_PATH:-./infra/telemetry/otel-collector-config.yaml}:/etc/otelcol-contrib/config.yaml:ro
+    ports:
+      - "${OTEL_BIND_IP:-127.0.0.1}:${OTEL_GRPC_PORT:-4317}:4317"         # OTLP gRPC receiver
+      - "${OTEL_BIND_IP:-127.0.0.1}:${OTEL_HTTP_PORT:-4318}:4318"         # OTLP HTTP receiver
+      - "${OTEL_BIND_IP:-127.0.0.1}:${OTEL_METRICS_PORT:-8888}:8888"       # Collector internal metrics
+      - "${OTEL_BIND_IP:-127.0.0.1}:${OTEL_PROMETHEUS_PORT:-8889}:8889"   # Prometheus scraper exporter
+    networks:
+      - telemetry-tier
+      - observability-tier
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:13133/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: "${OTEL_CPU_LIMIT:-1.5}"
+          memory: ${OTEL_MEM_LIMIT:-1024M}
+        reservations:
+          cpus: "0.2"
+          memory: 256M
+
+  # Metrics Engine: Prometheus
+  # Scrapes OTLP metrics endpoint, scoring kernel metrics, and host stats.
+  
+  prometheus:
+    image: prom/prometheus:${PROMETHEUS_VERSION:-v2.51.0}
+    container_name: security_prometheus
+    <<: [*default-restart, *default-logging]
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=${PROMETHEUS_RETENTION_TIME:-30d}"
+      - "--storage.tsdb.retention.size=${PROMETHEUS_RETENTION_SIZE:-50GB}"
+      - "--web.enable-lifecycle"
+      - "--web.console.libraries=/usr/share/prometheus/console_libraries"
+      - "--web.console.templates=/usr/share/prometheus/consoles"
+    volumes:
+      - ${PROMETHEUS_CONFIG_PATH:-./infra/telemetry/prometheus.yml}:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "${PROMETHEUS_BIND_IP:-127.0.0.1}:${PROMETHEUS_PORT:-9090}:9090"
+    networks:
+      - observability-tier
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:9090/-/healthy || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: "${PROMETHEUS_CPU_LIMIT:-2.0}"
+          memory: ${PROMETHEUS_MEM_LIMIT:-4096M}
+        reservations:
+          cpus: "0.5"
+          memory: 512M
+
+  
+  # Visualization & Dashboards: Grafana
+  # Provisioned with Prometheus and Jaeger/Tempo datasources for latency,
+  # scoring throughput, invariant violations, and XAI guardrail audit tracking.
+
+  grafana:
+    image: grafana/grafana:${GRAFANA_VERSION:-10.4.1}
+    container_name: security_grafana
+    <<: [*default-restart, *default-logging]
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_USERS_DEFAULT_THEME=${GRAFANA_THEME:-dark}
+      - GF_SERVER_ROOT_URL=${GRAFANA_ROOT_URL:-%(protocol)s://%(domain)s:%(http_port)s/}
+      - GF_INSTALL_PLUGINS=${GRAFANA_PLUGINS:-}
+      - GF_AUTH_ANONYMOUS_ENABLED=${GRAFANA_ANONYMOUS_ENABLED:-false}
+      - GF_LOG_LEVEL=${GRAFANA_LOG_LEVEL:-info}
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ${GRAFANA_PROVISIONING_PATH:-./infra/telemetry/grafana/provisioning}:/etc/grafana/provisioning:ro
+      - ${GRAFANA_DASHBOARDS_PATH:-./infra/telemetry/grafana/dashboards}:/var/lib/grafana/dashboards:ro
+    ports:
+      - "${GRAFANA_BIND_IP:-127.0.0.1}:${GRAFANA_PORT:-3000}:3000"
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    networks:
+      - observability-tier
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/api/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: "${GRAFANA_CPU_LIMIT:-1.0}"
+          memory: ${GRAFANA_MEM_LIMIT:-1024M}
+        reservations:
+          cpus: "0.2"
+          memory: 256M

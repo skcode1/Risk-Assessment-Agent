@@ -1,0 +1,281 @@
+name: risk-assessment-agent
+
+x-common-config: &common-config
+  restart: unless-stopped
+  security_opt:
+    - no-new-privileges:true
+  logging:
+    driver: "json-file"
+    options:
+      max-size: "50m"
+      max-file: "5"
+
+networks:
+  security-tier:
+    driver: bridge
+  telemetry-tier:
+    driver: bridge
+  ingress-tier:
+    driver: bridge
+
+volumes:
+  pg_data:
+    driver: local
+  redis_data:
+    driver: local
+  opensearch_data:
+    driver: local
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: security_postgres
+    <<: *common-config
+    environment:
+      POSTGRES_DB: "${POSTGRES_DB:-risk_engine}"
+      POSTGRES_USER: "${POSTGRES_USER:-postgres}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?CRITICAL - POSTGRES_PASSWORD must be set in .env}"
+      PGDATA: "/var/lib/postgresql/data/pgdata"
+    volumes:
+      - pg_data:/var/lib/postgresql/data/pgdata
+    ports:
+      - "${POSTGRES_BIND_IP:-127.0.0.1}:${POSTGRES_PORT:-5432}:5432"
+    networks:
+      - security-tier
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-risk_engine}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: "${POSTGRES_CPU_LIMIT:-2.0}"
+          memory: "${POSTGRES_MEM_LIMIT:-2048M}"
+        reservations:
+          cpus: "0.5"
+          memory: "512M"
+
+  redis:
+    image: redis:7.2-alpine
+    container_name: security_redis
+    <<: *common-config
+    command: >
+      sh -c '
+      if [ -n "$$REDIS_PASSWORD" ]; then
+        exec redis-server --requirepass "$$REDIS_PASSWORD" --appendonly yes --appendfsync everysec --maxmemory ${REDIS_MAXMEMORY:-512mb} --maxmemory-policy allkeys-lru
+      else
+        exec redis-server --appendonly yes --appendfsync everysec --maxmemory ${REDIS_MAXMEMORY:-512mb} --maxmemory-policy allkeys-lru
+      fi'
+    environment:
+      REDIS_PASSWORD: "${REDIS_PASSWORD:-}"
+    volumes:
+      - redis_data:/data
+    ports:
+      - "${REDIS_BIND_IP:-127.0.0.1}:${REDIS_PORT:-6379}:6379"
+    networks:
+      - security-tier
+    healthcheck:
+      test: >
+        sh -c '
+        if [ -n "$$REDIS_PASSWORD" ]; then
+          redis-cli -a "$$REDIS_PASSWORD" ping | grep -q PONG
+        else
+          redis-cli ping | grep -q PONG
+        fi'
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    deploy:
+      resources:
+        limits:
+          cpus: "${REDIS_CPU_LIMIT:-1.0}"
+          memory: "${REDIS_MEM_LIMIT:-1024M}"
+        reservations:
+          cpus: "0.2"
+          memory: "256M"
+
+  opensearch:
+    image: opensearchproject/opensearch:2.13.0
+    container_name: security_opensearch
+    <<: *common-config
+    environment:
+      - "cluster.name=${OPENSEARCH_CLUSTER_NAME:-risk-telemetry-cluster}"
+      - "node.name=opensearch-node1"
+      - "discovery.type=single-node"
+      - "bootstrap.memory_lock=true"
+      - "OPENSEARCH_JAVA_OPTS=-Xms${OPENSEARCH_JAVA_HEAP:-1024m} -Xmx${OPENSEARCH_JAVA_HEAP:-1024m}"
+      - "DISABLE_INSTALL_DEMO_CONFIG=true"
+      - "DISABLE_SECURITY_PLUGIN=${OPENSEARCH_DISABLE_SECURITY:-false}"
+      - "OPENSEARCH_INITIAL_ADMIN_PASSWORD=${OPENSEARCH_INITIAL_ADMIN_PASSWORD:?CRITICAL - OPENSEARCH_INITIAL_ADMIN_PASSWORD must be set in .env}"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    volumes:
+      - opensearch_data:/usr/share/opensearch/data
+    ports:
+      - "${OPENSEARCH_BIND_IP:-127.0.0.1}:${OPENSEARCH_PORT:-9200}:9200"
+    networks:
+      - telemetry-tier
+    healthcheck:
+      test: ["CMD-SHELL", "curl -k -u admin:${OPENSEARCH_INITIAL_ADMIN_PASSWORD} -s -f https://localhost:9200/_cluster/health || curl -s -f http://localhost:9200/_cluster/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 6
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: "${OPENSEARCH_CPU_LIMIT:-2.0}"
+          memory: "${OPENSEARCH_MEM_LIMIT:-3072M}"
+        reservations:
+          cpus: "0.5"
+          memory: "1536M"
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.98.0
+    container_name: security_otel_collector
+    <<: *common-config
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    volumes:
+      - ./telemetry/otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml:ro
+    ports:
+      - "${OTEL_BIND_IP:-127.0.0.1}:${OTEL_GRPC_PORT:-4317}:4317"
+      - "${OTEL_BIND_IP:-127.0.0.1}:${OTEL_HTTP_PORT:-4318}:4318"
+    networks:
+      - telemetry-tier
+      - security-tier
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:13133/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: "512M"
+
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+      target: production
+      args:
+        PYTHON_VERSION: "${PYTHON_VERSION:-3.12}"
+    image: "${BACKEND_IMAGE_NAME:-cyber-risk-engine-backend}:${IMAGE_TAG:-latest}"
+    container_name: security_backend
+    <<: *common-config
+    environment:
+      ENVIRONMENT: "${ENVIRONMENT:-production}"
+      PROJECT_NAME: "${PROJECT_NAME:-Cyber Risk Orchestration Engine}"
+      DEBUG: "${DEBUG:-false}"
+      LOG_LEVEL: "${LOG_LEVEL:-INFO}"
+
+      POSTGRES_SERVER: "postgres"
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: "${POSTGRES_DB:-risk_engine}"
+      POSTGRES_USER: "${POSTGRES_USER:-postgres}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?CRITICAL - POSTGRES_PASSWORD must be set in .env}"
+      POSTGRES_POOL_SIZE: "${POSTGRES_POOL_SIZE:-20}"
+      POSTGRES_MAX_OVERFLOW: "${POSTGRES_MAX_OVERFLOW:-10}"
+      DB_POOL_SIZE: "${POSTGRES_POOL_SIZE:-20}"
+      DB_MAX_OVERFLOW: "${POSTGRES_MAX_OVERFLOW:-10}"
+      DB_POOL_TIMEOUT: "30"
+      DB_POOL_RECYCLE: "1800"
+      DB_ECHO: "false"
+
+      REDIS_HOST: "redis"
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: "${REDIS_PASSWORD:-}"
+      REDIS_DB: "${REDIS_DB:-0}"
+
+      OPENSEARCH_HOST: "opensearch"
+      OPENSEARCH_PORT: "9200"
+      OPENSEARCH_USER: "${OPENSEARCH_USER:-admin}"
+      OPENSEARCH_PASSWORD: "${OPENSEARCH_INITIAL_ADMIN_PASSWORD:?CRITICAL - OPENSEARCH_INITIAL_ADMIN_PASSWORD must be set in .env}"
+      OPENSEARCH_USE_SSL: "${OPENSEARCH_USE_SSL:-true}"
+      OPENSEARCH_VERIFY_CERTS: "${OPENSEARCH_VERIFY_CERTS:-false}"
+
+      OTEL_EXPORTER_OTLP_ENDPOINT: "${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4317}"
+      OTEL_SERVICE_NAME: "${OTEL_SERVICE_NAME:-risk-engine-api}"
+
+      JWT_SECRET_KEY: "${JWT_SECRET_KEY:?CRITICAL - JWT_SECRET_KEY environment variable must be explicitly set}"
+      JWT_ALGORITHM: "${JWT_ALGORITHM:-HS256}"
+      ACCESS_TOKEN_EXPIRE_MINUTES: "${ACCESS_TOKEN_EXPIRE_MINUTES:-60}"
+
+      LLM_PROVIDER: "${LLM_PROVIDER:-openai}"
+      OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
+      OPENAI_MODEL: "${OPENAI_MODEL:-gpt-4o}"
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
+      ANTHROPIC_MODEL: "${ANTHROPIC_MODEL:-claude-3-5-sonnet-20241022}"
+      TEMPERATURE: "${LLM_TEMPERATURE:-0.0}"
+      MAX_TOKENS: "${LLM_MAX_TOKENS:-1024}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      opensearch:
+        condition: service_healthy
+      otel-collector:
+        condition: service_healthy
+    ports:
+      - "${BACKEND_BIND_IP:-127.0.0.1}:${BACKEND_PORT:-8000}:8000"
+    networks:
+      - security-tier
+      - telemetry-tier
+      - ingress-tier
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s -f http://localhost:8000/api/v1/health/readiness || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: "${BACKEND_CPU_LIMIT:-2.0}"
+          memory: "${BACKEND_MEM_LIMIT:-2048M}"
+        reservations:
+          cpus: "0.5"
+          memory: "512M"
+
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+      target: production
+      args:
+        VITE_API_BASE_URL: "${VITE_API_BASE_URL:-/api/v1}"
+    image: "${FRONTEND_IMAGE_NAME:-cyber-risk-engine-frontend}:${IMAGE_TAG:-latest}"
+    container_name: security_frontend
+    <<: *common-config
+    ports:
+      - "${FRONTEND_BIND_IP:-127.0.0.1}:${FRONTEND_PORT:-80}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - ingress-tier
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s -f http://localhost:80/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: "${FRONTEND_CPU_LIMIT:-1.0}"
+          memory: "${FRONTEND_MEM_LIMIT:-512M}"
+        reservations:
+          cpus: "0.1"
+          memory: "128M"
