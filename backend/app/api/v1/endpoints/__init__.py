@@ -1,6 +1,6 @@
 """
 API v1 Endpoints Package Initialization.
-Exports route modules for router registration with backwards-compatible aliases.
+Exports route modules for router registration.
 """
 
 # Core health checks
@@ -25,17 +25,11 @@ except ImportError:
     from app.api.v1.endpoints import policy as policies
 
 # Risk Assessments
-try:
-    from app.api.v1.endpoints import risk_assessments
-except ImportError:
-    try:
-        from app.api.v1.endpoints import risk_assessment as risk_assessments
-    except ImportError:
-        from app.api.v1.endpoints import assessment as risk_assessments
+from app.api.v1.endpoints import risk_assessment as risk_assessments
 
 __all__ = [
-    "health",
     "detections",
+    "health",
     "investigations",
     "policies",
     "risk_assessments",

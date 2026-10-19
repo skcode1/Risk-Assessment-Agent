@@ -1,0 +1,91 @@
+{
+  "policy": {
+    "description": "ILM policy for INFILTRIX security events and threat intelligence indices with monthly rollover",
+    "default_state": "hot",
+    "schema_version": 1,
+    "states": [
+      {
+        "name": "hot",
+        "actions": [
+          {
+            "rollover": {
+              "min_size": "10gb",
+              "min_index_age": "7d",
+              "max_docs": 50000000
+            }
+          }
+        ],
+        "transitions": [
+          {
+            "state_name": "warm",
+            "conditions": {
+              "min_index_age": "7d"
+            }
+          }
+        ]
+      },
+      {
+        "name": "warm",
+        "actions": [
+          {
+            "forcemerge": {
+              "max_num_segments": 1
+            }
+          },
+          {
+            "shrink": {
+              "number_of_shards": 1
+            }
+          },
+          {
+            "readonly": {}
+          }
+        ],
+        "transitions": [
+          {
+            "state_name": "cold",
+            "conditions": {
+              "min_index_age": "30d"
+            }
+          }
+        ]
+      },
+      {
+        "name": "cold",
+        "actions": [
+          {
+            "readonly": {}
+          },
+          {
+            "searchable_snapshot": {
+              "snapshot_repository": "cold-storage"
+            }
+          }
+        ],
+        "transitions": [
+          {
+            "state_name": "delete",
+            "conditions": {
+              "min_index_age": "90d"
+            }
+          }
+        ]
+      },
+      {
+        "name": "delete",
+        "actions": [
+          {
+            "delete": {}
+          }
+        ]
+      }
+    ],
+    "index_settings": {
+      "number_of_shards": 3,
+      "number_of_replicas": 1,
+      "refresh_interval": "5s",
+      "index.sort.field": "@timestamp",
+      "index.sort.order": "desc"
+    }
+  }
+}

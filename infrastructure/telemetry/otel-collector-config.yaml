@@ -1,0 +1,132 @@
+# OpenTelemetry Collector Configuration for Cyber Risk Orchestration Engine
+# Receives traces/metrics from the application and exports to backends
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+  prometheus:
+    config:
+      scrape_configs:
+        - job_name: 'risk-engine'
+          static_configs:
+            - targets: ['backend:8000']
+          metrics_path: '/metrics'
+
+exporters:
+  # Export to OpenSearch for logs/traces
+  opensearch:
+    endpoint: "http://opensearch:9200"
+    indexes:
+      - index_name: "security-traces-%{date}"
+        mapping:
+          type: "traces"
+      - index_name: "security-metrics-%{date}"
+        mapping:
+          type: "metrics"
+      - index_name: "security-logs-%{date}"
+        mapping:
+          type: "logs"
+    auth:
+      username: "admin"
+      password: "${OPENSEARCH_INITIAL_ADMIN_PASSWORD}"
+    tls:
+      insecure: true
+
+  # Export to console for debugging
+  debug:
+    verbosity: detailed
+
+  # Export to Prometheus remote write (if configured)
+  # prometheusremotewrite:
+  #   endpoint: "http://prometheus:9090/api/v1/write"
+
+processors:
+  batch:
+    timeout: 10s
+    send_batch_size: 1000
+
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 512
+    spike_limit_mib: 128
+
+  attributes:
+    actions:
+      - key: "service.name"
+        action: "upsert"
+        value: "risk-engine-api"
+
+  # Filter out health check noise
+  filter:
+    spans:
+      exclude:
+        match_type: regexp
+        attributes:
+          - key: "http.route"
+            value: "^/health/.*"
+          - key: "http.route"
+            value: "^/metrics"
+
+  # Transform for better correlation
+  transform:
+    trace_statements:
+      - context: span
+        statements:
+          - set(attributes["http.route"], attributes["http.target"])
+          - set(attributes["net.peer.ip"], attributes["http.client_ip"])
+
+  # Tail sampling for production
+  tailsampling:
+    decision_wait: 30s
+    num_traces: 50000
+    expected_new_traces_per_sec: 1000
+    policies:
+      - name: error-policy
+        type: status_code
+        status_code:
+          status_codes:
+            - ERROR
+      - name: slow-policy
+        type: latency
+        latency:
+          threshold_ms: 500
+      - name: scoring-policy
+        type: string_attribute
+        string_attribute:
+          key: "scoring.operation"
+          values: ["calculate", "explain"]
+      - name: probabilistic-policy
+        type: probabilistic
+        probabilistic:
+          sampling_percentage: 10
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+  pprof:
+    endpoint: 0.0.0.0:1777
+
+  zpages:
+    endpoint: 0.0.0.0:55679
+
+service:
+  extensions: [health_check, pprof, zpages]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, batch, filter, transform, tailsampling]
+      exporters: [opensearch, debug]
+    metrics:
+      receivers: [otlp, prometheus]
+      processors: [memory_limiter, batch, attributes]
+      exporters: [opensearch, debug]
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, batch, attributes]
+      exporters: [opensearch, debug]

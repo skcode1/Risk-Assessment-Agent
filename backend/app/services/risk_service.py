@@ -13,11 +13,10 @@ from __future__ import annotations
 
 import json
 import logging
-import math
 import time
 from collections.abc import Mapping
 from decimal import Decimal, InvalidOperation
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
 from uuid import UUID, uuid4
 
 import redis.asyncio as aioredis
@@ -26,6 +25,7 @@ from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.exceptions import (
     InvariantViolationException,
     PolicyNotFoundException,
@@ -65,7 +65,6 @@ from app.domain.models.policy import (
 )
 from app.schemas.assessment import AssessmentCreateRequest, AssessmentResponse
 
-
 logger = logging.getLogger(__name__)
 tracer = get_tracer()
 
@@ -76,7 +75,7 @@ tracer = get_tracer()
 # saturation curve, and sensitivity resolves to the policy asset weight
 # without escalation boosts. Policy governance can still override these at
 # runtime via calculator-specific parameters.
-SPEC_RUNTIME_PARAMETERS: Dict[str, Dict[str, Any]] = {
+SPEC_RUNTIME_PARAMETERS: dict[str, dict[str, Any]] = {
     "behavior": {"apply_severity_hint_blend": False},
     "frequency": {"curve_type": "linear"},
     "sensitivity": {
@@ -92,10 +91,10 @@ class RiskOrchestrationService:
     def __init__(
         self,
         db_session: AsyncSession,
-        redis_client: Optional[aioredis.Redis] = None,
-        opensearch_client: Optional[AsyncOpenSearch] = None,
-        scoring_kernel: Optional[DeterministicRiskScoringKernel] = None,
-        invariant_verifier: Optional[ScoringInvariantVerifier] = None,
+        redis_client: aioredis.Redis | None = None,
+        opensearch_client: AsyncOpenSearch | None = None,
+        scoring_kernel: DeterministicRiskScoringKernel | None = None,
+        invariant_verifier: ScoringInvariantVerifier | None = None,
     ) -> None:
         self.db = db_session
         self.redis = redis_client
@@ -106,7 +105,7 @@ class RiskOrchestrationService:
     async def assess_risk(
         self,
         request: AssessmentCreateRequest,
-        policy_version: Optional[str] = None,
+        policy_version: str | None = None,
     ) -> AssessmentResponse:
         """Enrich, score, verify, and flush a risk assessment."""
         start_time = time.perf_counter()
@@ -213,7 +212,8 @@ class RiskOrchestrationService:
         if self.redis is not None:
             try:
                 redis_key = f"counter:{source_ip}:events"
-                minimum_timestamp = time.time() - 3600.0
+                window_seconds = getattr(settings.app, "SLIDING_WINDOW_SECONDS", 3600)
+                minimum_timestamp = time.time() - float(window_seconds)
 
                 async with self.redis.pipeline(
                     transaction=True
@@ -259,7 +259,7 @@ class RiskOrchestrationService:
         """Query historical high-risk incidents, with a database fallback."""
         if self.opensearch is not None:
             try:
-                query: Dict[str, Any] = {
+                query: dict[str, Any] = {
                     "query": {
                         "bool": {
                             "must": [
@@ -435,8 +435,8 @@ class RiskOrchestrationService:
 
     async def _load_policy(
         self,
-        policy_version: Optional[str] = None,
-    ) -> Tuple[RiskPolicy, PolicyModel]:
+        policy_version: str | None = None,
+    ) -> tuple[RiskPolicy, PolicyModel]:
         """Load the requested or active policy from PostgreSQL."""
         statement = select(PolicyModel)
 
@@ -609,7 +609,7 @@ class RiskOrchestrationService:
             raise ValueError("detection_event is required to evaluate risk.")
 
         if isinstance(raw_detection, Mapping):
-            data: Dict[str, Any] = dict(raw_detection)
+            data: dict[str, Any] = dict(raw_detection)
         elif isinstance(raw_detection, BaseModel):
             data = raw_detection.model_dump(mode="json")
         else:
@@ -677,7 +677,7 @@ class RiskOrchestrationService:
         raw_investigation = request.investigation_result
 
         if raw_investigation is None:
-            telemetry_data: Dict[str, Any] = {}
+            telemetry_data: dict[str, Any] = {}
             touched_raw: list = []
             is_mapping_shape = True
         elif isinstance(raw_investigation, Mapping):

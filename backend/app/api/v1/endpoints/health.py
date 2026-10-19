@@ -5,17 +5,14 @@ Provides non-blocking Kubernetes liveness probes, deep dependency readiness chec
 """
 
 import time
-from typing import Any, Dict
+from typing import Any
 
 from fastapi import APIRouter, Response, status
 from opensearchpy import AsyncOpenSearch
-import redis.asyncio as aioredis
-from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.core.database import async_session_factory, verify_database_connection
-from app.core.redis import get_redis_client, verify_redis_connection
+from app.core.database import verify_database_connection
+from app.core.redis import verify_redis_connection
 from app.core.telemetry import get_tracer
 
 router = APIRouter()
@@ -28,7 +25,7 @@ tracer = get_tracer()
     summary="Liveness Probe",
     description="Shallow probe verifying that the application event loop is operational.",
 )
-async def liveness_probe() -> Dict[str, Any]:
+async def liveness_probe() -> dict[str, Any]:
     """
     Returns immediate HTTP 200 indicating the ASGI worker process is alive.
     Excludes external dependency calls to prevent cascading restarts.
@@ -47,7 +44,7 @@ async def liveness_probe() -> Dict[str, Any]:
     summary="Readiness Probe",
     description="Deep diagnostic probe verifying reachability of PostgreSQL, Redis, and OpenSearch.",
 )
-async def readiness_probe(response: Response) -> Dict[str, Any]:
+async def readiness_probe(response: Response) -> dict[str, Any]:
     """
     Validates essential backend infrastructure:
       - PostgreSQL connection pool acquisition and query execution (`SELECT 1`)
@@ -56,7 +53,7 @@ async def readiness_probe(response: Response) -> Dict[str, Any]:
     Returns HTTP 503 Service Unavailable if any mandatory data store is unreachable.
     """
     with tracer.start_as_current_span("health.readiness_probe") as span:
-        dependencies: Dict[str, Dict[str, Any]] = {}
+        dependencies: dict[str, dict[str, Any]] = {}
         is_ready = True
 
         # 1. PostgreSQL Health Check

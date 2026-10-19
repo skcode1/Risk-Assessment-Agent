@@ -6,11 +6,12 @@ GET /api/v1/risk-assessments/{assessment_id} (forensic retrieval),
 analyst score override workflows, and host containment triggers with strict RBAC.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Annotated, Any, Dict, List, Optional
+from typing import Annotated, Any
 from uuid import UUID
 
+import redis.asyncio as aioredis
 from fastapi import (
     APIRouter,
     Body,
@@ -21,7 +22,6 @@ from fastapi import (
     Response,
     status,
 )
-import redis.asyncio as aioredis
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -49,7 +49,7 @@ tracer = get_tracer()
 
 @router.get(
     "",
-    response_model=List[AssessmentDetailResponse],
+    response_model=list[AssessmentDetailResponse],
     status_code=status.HTTP_200_OK,
     summary="List Risk Assessments",
 )
@@ -57,7 +57,7 @@ async def list_risk_assessments(
     db: Annotated[AsyncSession, Depends(get_db_session)],
     claims: Annotated[TokenClaims, Depends(require_scopes("assessments:read"))],
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
-) -> List[AssessmentDetailResponse]:
+) -> list[AssessmentDetailResponse]:
     """Lists recent risk assessments for authenticated analysts."""
     stmt = select(RiskAssessmentModel).limit(limit)
     result = await db.execute(stmt)
@@ -78,14 +78,14 @@ async def evaluate_risk_assessment(
     redis: Annotated[aioredis.Redis, Depends(get_redis_client)],
     claims: Annotated[TokenClaims, Depends(require_scopes("assessments:write"))],
     idempotency_key: Annotated[
-        Optional[str],
+        str | None,
         Header(
             alias="Idempotency-Key",
             description="Unique token preventing duplicate evaluation of identical events",
         ),
     ] = None,
     policy_version: Annotated[
-        Optional[str],
+        str | None,
         Query(description="Specific immutable risk policy version to evaluate against"),
     ] = None,
 ) -> AssessmentResponse:
@@ -198,7 +198,7 @@ async def override_risk_assessment(
             "justification": request.justification,
             "ticket_reference": request.ticket_reference,
         },
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
     )
     db.add(audit_log)
 
@@ -206,7 +206,7 @@ async def override_risk_assessment(
     record.override_rating = request.override_rating
     record.override_justification = request.justification
     record.overridden_by = claims.preferred_username or claims.sub
-    record.overridden_at = datetime.now(timezone.utc)
+    record.overridden_at = datetime.now(UTC)
 
     await db.flush()
     await db.refresh(record)
@@ -226,8 +226,8 @@ async def trigger_containment_action(
         Depends(require_scopes("assessments:contain")),
         Depends(require_roles("ROLE_SOC_ANALYST_L2", "ROLE_SOC_LEAD", "ROLE_SECURITY_ADMIN")),
     ],
-    payload: Dict[str, Any] = Body(...),
-) -> Dict[str, Any]:
+    payload: dict[str, Any] = Body(...),
+) -> dict[str, Any]:
     """Triggers automated containment workflows; restricted to Tier-2+ SOC roles."""
     return {
         "assessment_id": str(assessment_id),

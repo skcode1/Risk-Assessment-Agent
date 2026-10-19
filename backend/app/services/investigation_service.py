@@ -5,12 +5,11 @@ OpenSearch historical incident lookups, and endpoint compromise tracking prior t
 deterministic risk scoring kernel evaluation.
 """
 
-from decimal import Decimal
 import logging
 import time
-from typing import Any, Dict, List, Optional
+from decimal import ROUND_HALF_UP, Decimal
+from typing import Any
 from uuid import UUID, uuid4
-
 
 import redis.asyncio as aioredis
 from sqlalchemy import func, select
@@ -38,6 +37,7 @@ from app.domain.models.investigation import (
     InvestigationTelemetry,
     TouchedEndpoint,
 )
+from app.domain.models.policy import RiskPolicy
 from app.schemas.investigation import (
     InvestigationCreateRequest,
     InvestigationResponse,
@@ -69,8 +69,8 @@ class InvestigationOrchestrationService:
     def __init__(
         self,
         db_session: AsyncSession,
-        redis_client: Optional[aioredis.Redis] = None,
-        opensearch_client: Optional[AsyncOpenSearch] = None,
+        redis_client: aioredis.Redis | None = None,
+        opensearch_client: AsyncOpenSearch | None = None,
         sliding_window_seconds: int = 3600,
     ) -> None:
         self.db = db_session
@@ -81,7 +81,7 @@ class InvestigationOrchestrationService:
     async def ingest_investigation(
         self,
         request: InvestigationCreateRequest,
-        actor_identifier: Optional[str] = None,
+        actor_identifier: str | None = None,
     ) -> InvestigationResponse:
         """
         Persists correlated investigation telemetry directly and triggers automated enrichment
@@ -151,8 +151,8 @@ class InvestigationOrchestrationService:
     async def build_investigation_domain(
         self,
         detection: DetectionEvent,
-        base_telemetry: Optional[InvestigationTelemetry] = None,
-        touched_endpoints: Optional[List[TouchedEndpoint]] = None,
+        base_telemetry: InvestigationTelemetry | None = None,
+        touched_endpoints: list[TouchedEndpoint] | None = None,
     ) -> InvestigationResult:
         """
         Assembles a fully hydrated, pure domain InvestigationResult for a detection event
@@ -215,7 +215,7 @@ class InvestigationOrchestrationService:
 
     async def get_investigation_by_correlation_id(
         self, correlation_id: UUID
-    ) -> Optional[InvestigationResponse]:
+    ) -> InvestigationResponse | None:
         """Retrieves investigation telemetry associated with a correlation identifier."""
         with tracer.start_as_current_span("investigation_service.get_by_correlation_id"):
             stmt = (
@@ -260,7 +260,7 @@ class InvestigationOrchestrationService:
         """
         if self.opensearch is not None:
             try:
-                search_query: Dict[str, Any] = {
+                search_query: dict[str, Any] = {
                     "query": {
                         "bool": {
                             "filter": [
@@ -303,31 +303,34 @@ class InvestigationOrchestrationService:
         return int(result.scalar_one() or 0)
 
     def _determine_dominant_endpoint_class(
-        self, endpoints: List[TouchedEndpoint]
+        self,
+        endpoints: list[TouchedEndpoint],
+        policy: RiskPolicy | None = None,
     ) -> EndpointClass:
         """
         Evaluates the highest-priority endpoint class across touched infrastructure.
         Prioritizes confirmed compromises and critical asset categories.
-        """
-        hierarchy: Dict[EndpointClass, int] = {
-            EndpointClass.DOMAIN_CONTROLLER: 50,
-            EndpointClass.DATABASE_SERVER: 40,
-            EndpointClass.INTERNAL_SERVER: 30,
-            EndpointClass.CLOUD_WORKLOAD: 20,
-            EndpointClass.WORKSTATION: 10,
-        }
 
+        Endpoint weights are resolved authoritatively from the active RiskPolicy
+        via RiskPolicy.get_endpoint_weight(), falling back to the EndpointClass
+        seed-data default_base_weight when no policy is supplied.
+        """
         # Check for confirmed compromised assets first
         compromised = [ep for ep in endpoints if ep.is_compromised]
         target_group = compromised if compromised else endpoints
 
         best_class = EndpointClass.WORKSTATION
-        highest_score = -1
+        highest_weight = Decimal("-1")
 
         for ep in target_group:
-            score = hierarchy.get(ep.endpoint_class, 0)
-            if score > highest_score:
-                highest_score = score
+            if policy is not None:
+                weight = policy.get_endpoint_weight(ep.endpoint_class)
+            else:
+                weight = Decimal(str(ep.endpoint_class.default_base_weight)).quantize(
+                    Decimal("0.1"), rounding=ROUND_HALF_UP
+                )
+            if weight > highest_weight:
+                highest_weight = weight
                 best_class = ep.endpoint_class
 
         return best_class

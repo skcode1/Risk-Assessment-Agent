@@ -6,22 +6,21 @@ or manual HTTP/curl requests.
 """
 
 import asyncio
-from decimal import Decimal
 import logging
 import sys
-from typing import Any, Dict, Optional
+from decimal import Decimal
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import Table, insert, select
 from sqlalchemy.exc import SQLAlchemyError
 
-from app.core.database import Base, async_session_factory, close_db_engine
-
 # Preload all ORM models so Base.metadata is populated
-import app.db.models.assessment  # noqa: F401
-import app.db.models.detection  # noqa: F401
-import app.db.models.investigation  # noqa: F401
+import app.db.models.assessment
+import app.db.models.detection
+import app.db.models.investigation
 import app.db.models.policy  # noqa: F401
+from app.core.database import Base, async_session_factory, close_db_engine
 
 try:
     from app.domain.models.policy import RiskPolicy
@@ -50,13 +49,13 @@ def _resolve_policy_table() -> Table:
     )
 
 
-def _build_row_payload(table: Table, domain_policy: RiskPolicy) -> Dict[str, Any]:
+def _build_row_payload(table: Table, domain_policy: RiskPolicy) -> dict[str, Any]:
     """
     Maps the authoritative RiskPolicy domain entity onto the exact column schema
     of the target SQLAlchemy PostgreSQL table.
     """
     cols = table.columns.keys()
-    payload: Dict[str, Any] = {}
+    payload: dict[str, Any] = {}
 
     # 1. Primary Key / Identifier
     if "policy_id" in cols:
@@ -147,7 +146,7 @@ def _build_row_payload(table: Table, domain_policy: RiskPolicy) -> Dict[str, Any
     return payload
 
 
-async def seed_baseline_policy() -> Optional[UUID]:
+async def seed_baseline_policy() -> UUID | None:
     """
     Idempotently seeds the default RiskPolicy into PostgreSQL.
     If an active policy or matching baseline policy already exists, skips insertion.

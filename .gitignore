@@ -36,7 +36,7 @@ share/python-wheels/
 *.egg
 
 
-# TESTING & COVERAGE
+
 
 .pytest_cache/
 .coverage
@@ -50,7 +50,7 @@ coverage.xml
 .nox/
 
 
-# DATABASE & LOGS
+
 
 *.sqlite3
 *.db
@@ -62,7 +62,7 @@ coverage.xml
 /prometheus_data/
 
 
-# FRONTEND (NODE/REACT/VITE)
+
 
 frontend/node_modules/
 frontend/dist/
@@ -76,7 +76,7 @@ yarn-debug.log*
 yarn-error.log*
 
 
-# OS & IDE TEMPORARY FILES
+
 
 .vscode/
 .idea/
@@ -92,8 +92,15 @@ ehthumbs.db
 Thumbs.db
 
 
-# TYPING & LINTING CACHES
+
 
 .mypy_cache/
 .ruff_cache/
 .pyre/
+!.env.example
+!.env.test.example
+coverage_html/
+.testcontainers.properties
+.pdm-python
+.pdm-build/
+pip-wheel-metadata/

@@ -1,12 +1,7 @@
-"""
-Core OpenTelemetry Instrumentation and Observability Module.
-Configures distributed tracing, metric instrumentation, span processors,
-and FastAPI auto-instrumentation without hardcoded parameters.
-"""
 
-from collections.abc import Mapping
 import logging
-from typing import Any, Optional
+from collections.abc import Mapping
+from typing import Any
 
 from fastapi import FastAPI
 from opentelemetry import metrics, trace
@@ -26,14 +21,14 @@ from app.core.config import settings
 logger = logging.getLogger(__name__)
 
 # Tracer and Meter module-level handles
-_tracer: Optional[Tracer] = None
-_meter: Optional[metrics.Meter] = None
+_tracer: Tracer | None = None
+_meter: metrics.Meter | None = None
 
 
 def build_resource(
-    service_name: Optional[str] = None,
-    environment: Optional[str] = None,
-    extra_attributes: Optional[Mapping[str, Any]] = None,
+    service_name: str | None = None,
+    environment: str | None = None,
+    extra_attributes: Mapping[str, Any] | None = None,
 ) -> Resource:
     """
     Constructs an OpenTelemetry Resource descriptor capturing service identity,
@@ -50,8 +45,8 @@ def build_resource(
 
 
 def setup_telemetry(
-    app: Optional[FastAPI] = None,
-    otlp_endpoint: Optional[str] = None,
+    app: FastAPI | None = None,
+    otlp_endpoint: str | None = None,
     enable_console_fallback: bool = False,
 ) -> None:
     """
@@ -131,7 +126,7 @@ class TelemetryMetricsRegistry:
     histograms, and gauge meters.
     """
 
-    def __init__(self, meter: Optional[metrics.Meter] = None) -> None:
+    def __init__(self, meter: metrics.Meter | None = None) -> None:
         self._meter = meter or get_meter()
 
         self.risk_assessment_counter = self._meter.create_counter(

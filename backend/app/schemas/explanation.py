@@ -5,10 +5,10 @@ Enforces the architectural invariant: narratives must ground themselves directly
 deterministic scoring components and cannot mutate scores, weights, or ratings.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from enum import Enum
-from typing import Annotated, Any, Dict, List, Optional
+from typing import Annotated, Any
 from uuid import UUID, uuid4
 
 from pydantic import (
@@ -16,7 +16,6 @@ from pydantic import (
     ConfigDict,
     Field,
     field_validator,
-    model_validator,
 )
 
 from app.schemas.assessment import RiskCategory, RiskComponentsBreakdown
@@ -76,7 +75,7 @@ class RiskExplanationBase(BaseModel):
         Field(..., description="Identified leading sub-score contributing most heavily to the score."),
     ]
     key_factors: Annotated[
-        List[str],
+        list[str],
         Field(
             ...,
             min_length=1,
@@ -90,7 +89,7 @@ class RiskExplanationBase(BaseModel):
         ),
     ]
     evidence_citations: Annotated[
-        List[EvidenceCitation],
+        list[EvidenceCitation],
         Field(default_factory=list, description="Verifiable data links to raw investigation facts."),
     ]
 
@@ -109,7 +108,7 @@ class RiskExplanationRequest(BaseModel):
     components: Annotated[RiskComponentsBreakdown, Field(...)]
     policy_version: Annotated[str, Field(..., min_length=1)]
     telemetry_digest: Annotated[
-        Dict[str, Any],
+        dict[str, Any],
         Field(default_factory=dict, description="Raw facts from InvestigationResult passed for evidence grounding."),
     ]
 
@@ -123,11 +122,11 @@ class RiskExplanationCreate(RiskExplanationBase):
         Field(default=ExplanationSource.CONSTRAINED_LLM, description="Technology that created this narrative."),
     ]
     model_identifier: Annotated[
-        Optional[str],
+        str | None,
         Field(default=None, max_length=128, description="Model tag if generated via LLM (e.g., 'gpt-4o-mini')."),
     ]
-    prompt_tokens: Annotated[Optional[int], Field(default=None, ge=0)]
-    completion_tokens: Annotated[Optional[int], Field(default=None, ge=0)]
+    prompt_tokens: Annotated[int | None, Field(default=None, ge=0)]
+    completion_tokens: Annotated[int | None, Field(default=None, ge=0)]
 
 
 class RiskExplanation(RiskExplanationBase):
@@ -147,11 +146,11 @@ class RiskExplanation(RiskExplanationBase):
         Field(default_factory=uuid4, description="Unique identifier for this explanation record."),
     ]
     source: Annotated[ExplanationSource, Field(...)]
-    model_identifier: Annotated[Optional[str], Field(default=None)]
+    model_identifier: Annotated[str | None, Field(default=None)]
     generated_at: Annotated[
         datetime,
         Field(
-            default_factory=lambda: datetime.now(timezone.utc),
+            default_factory=lambda: datetime.now(UTC),
             description="UTC timestamp when the explanation was compiled.",
         ),
     ]
@@ -160,11 +159,11 @@ class RiskExplanation(RiskExplanationBase):
     @classmethod
     def ensure_utc(cls, v: datetime) -> datetime:
         if v.tzinfo is None:
-            return v.replace(tzinfo=timezone.utc)
-        return v.astimezone(timezone.utc)
+            return v.replace(tzinfo=UTC)
+        return v.astimezone(UTC)
 
     @classmethod
-    def from_create(cls, payload: RiskExplanationCreate, explanation_id: Optional[UUID] = None) -> "RiskExplanation":
+    def from_create(cls, payload: RiskExplanationCreate, explanation_id: UUID | None = None) -> "RiskExplanation":
         """Factory method normalizing RiskExplanationCreate into an authoritative RiskExplanation record."""
         return cls(
             explanation_id=explanation_id or uuid4(),
@@ -175,5 +174,5 @@ class RiskExplanation(RiskExplanationBase):
             evidence_citations=payload.evidence_citations,
             source=payload.source,
             model_identifier=payload.model_identifier,
-            generated_at=datetime.now(timezone.utc),
+            generated_at=datetime.now(UTC),
         )

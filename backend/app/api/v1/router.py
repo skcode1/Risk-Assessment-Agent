@@ -8,9 +8,9 @@ from fastapi import APIRouter
 
 from app.api.v1.endpoints import (
     health,
-    investigations,
-    policies,
-    risk_assessments,
+    investigation,
+    policy,
+    risk_assessment,
 )
 
 api_router = APIRouter()
@@ -24,21 +24,21 @@ api_router.include_router(
 
 # Deterministic cyber risk assessment pipeline
 api_router.include_router(
-    risk_assessments.router,
+    risk_assessment.router,
     prefix="/risk-assessments",
     tags=["Risk Assessments"],
 )
 
 # Dynamic policy lifecycle & weight governance
 api_router.include_router(
-    policies.router,
+    policy.router,
     prefix="/policies",
     tags=["Risk Policies"],
 )
 
 # Investigation telemetry & asset enrichment
 api_router.include_router(
-    investigations.router,
+    investigation.router,
     prefix="/investigations",
     tags=["Investigations & Telemetry"],
 )

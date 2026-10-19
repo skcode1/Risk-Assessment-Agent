@@ -245,4 +245,16 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_detections_correlation_id'), table_name='detections')
     op.drop_index('ix_detections_correlation_detected_at', table_name='detections')
     op.drop_table('detections')
+
+    # Explicitly drop custom PostgreSQL ENUM types
+    bind = op.get_bind()
+    for enum_name in [
+        "explanation_source_enum",
+        "component_driver_enum",
+        "risk_category_enum",
+        "endpoint_class_enum",
+        "detection_severity_enum",
+        "detection_source_type_enum",
+    ]:
+        sa.Enum(name=enum_name).drop(bind, checkfirst=True)
     # ### end Alembic commands ###

@@ -7,11 +7,17 @@ versioned governance, and complete execution auditability.
 """
 
 from abc import ABC, abstractmethod
+from collections.abc import Mapping
 from dataclasses import dataclass
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
-from typing import Any, Dict, Mapping, Optional
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
+from typing import Any
 from uuid import UUID, uuid4
 
+from app.domain.engine.calculators.behavior import DynamicBehaviorCalculator
+from app.domain.engine.calculators.frequency import DynamicFrequencyCalculator
+from app.domain.engine.calculators.history import DynamicHistoryCalculator
+from app.domain.engine.calculators.sensitivity import DynamicSensitivityCalculator
+from app.domain.engine.resolver import DynamicRiskCategoryResolver
 from app.domain.models.assessment import (
     AppliedPolicySnapshot,
     RiskAssessment,
@@ -21,11 +27,6 @@ from app.domain.models.detection import DetectionEvent
 from app.domain.models.enums import RiskCategory
 from app.domain.models.investigation import InvestigationResult
 from app.domain.models.policy import PolicyWeights, RiskPolicy
-from app.domain.engine.calculators.behavior import DynamicBehaviorCalculator
-from app.domain.engine.calculators.frequency import DynamicFrequencyCalculator
-from app.domain.engine.calculators.history import DynamicHistoryCalculator
-from app.domain.engine.calculators.sensitivity import DynamicSensitivityCalculator
-from app.domain.engine.resolver import DynamicRiskCategoryResolver
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,7 +38,7 @@ class KernelExecutionAudit:
     raw_weighted_sum: Decimal
     quantized_score: Decimal
     resolved_category: RiskCategory
-    weights_applied: Dict[str, Decimal]
+    weights_applied: dict[str, Decimal]
 
 
 @dataclass(frozen=True, slots=True)
@@ -59,10 +60,9 @@ class RiskScoringEngineInterface(ABC):
         detection: DetectionEvent,
         investigation: InvestigationResult,
         policy: RiskPolicy,
-        runtime_parameters: Optional[Mapping[str, Any]] = None,
+        runtime_parameters: Mapping[str, Any] | None = None,
     ) -> RiskAssessment:
         """Evaluates detection and investigation contexts into an authoritative RiskAssessment."""
-        pass
 
 
 class DeterministicRiskScoringKernel(RiskScoringEngineInterface):
@@ -79,11 +79,11 @@ class DeterministicRiskScoringKernel(RiskScoringEngineInterface):
 
     def __init__(
         self,
-        behavior_calculator: Optional[DynamicBehaviorCalculator] = None,
-        frequency_calculator: Optional[DynamicFrequencyCalculator] = None,
-        sensitivity_calculator: Optional[DynamicSensitivityCalculator] = None,
-        history_calculator: Optional[DynamicHistoryCalculator] = None,
-        category_resolver: Optional[DynamicRiskCategoryResolver] = None,
+        behavior_calculator: DynamicBehaviorCalculator | None = None,
+        frequency_calculator: DynamicFrequencyCalculator | None = None,
+        sensitivity_calculator: DynamicSensitivityCalculator | None = None,
+        history_calculator: DynamicHistoryCalculator | None = None,
+        category_resolver: DynamicRiskCategoryResolver | None = None,
     ) -> None:
         self._behavior_calculator = behavior_calculator or DynamicBehaviorCalculator()
         self._frequency_calculator = frequency_calculator or DynamicFrequencyCalculator()
@@ -96,7 +96,7 @@ class DeterministicRiskScoringKernel(RiskScoringEngineInterface):
         detection: DetectionEvent,
         investigation: InvestigationResult,
         policy: RiskPolicy,
-        runtime_parameters: Optional[Mapping[str, Any]] = None,
+        runtime_parameters: Mapping[str, Any] | None = None,
     ) -> RiskAssessment:
         """
         Calculates normalized components, executes strict Decimal weighted arithmetic,
@@ -108,10 +108,12 @@ class DeterministicRiskScoringKernel(RiskScoringEngineInterface):
         behavior_score = self._behavior_calculator.calculate(
             detection=detection,
             investigation=investigation,
+            policy=policy,
             parameters=params.get("behavior"),
         )
         frequency_score = self._frequency_calculator.calculate(
             investigation=investigation,
+            policy=policy,
             parameters=params.get("frequency"),
         )
         sensitivity_score = self._sensitivity_calculator.calculate(
@@ -194,6 +196,7 @@ class DeterministicRiskScoringKernel(RiskScoringEngineInterface):
                 "sensitivity": w_s,
                 "history": w_h,
             },
+            thresholds=policy.thresholds.to_dict(),
         )
 
         audit_trace = KernelExecutionAudit(

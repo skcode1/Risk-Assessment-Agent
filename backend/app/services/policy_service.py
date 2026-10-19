@@ -5,11 +5,12 @@ versioning, continuous threshold invariant validation, weight normalization chec
 and atomic activation/deactivation within PostgreSQL transactions.
 """
 
-from decimal import Decimal
 import logging
-from typing import Any, Dict, List, Optional
+from decimal import Decimal
+from typing import Any
 from uuid import UUID, uuid4
 
+import redis.asyncio as aioredis
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -40,6 +41,10 @@ from app.schemas.policy import (
 logger = logging.getLogger(__name__)
 tracer = get_tracer()
 
+# Redis cache key for active policy
+ACTIVE_POLICY_CACHE_KEY = "policy:active"
+ACTIVE_POLICY_CACHE_TTL = 60  # seconds
+
 
 class PolicyConflictException(BaseAppException):
     """Raised when an operation attempts to register a duplicate policy version."""
@@ -62,14 +67,27 @@ class PolicyManagementService:
     def __init__(
         self,
         db_session: AsyncSession,
-        verifier: Optional[ScoringInvariantVerifier] = None,
+        redis_client: aioredis.Redis | None = None,
+        verifier: ScoringInvariantVerifier | None = None,
     ) -> None:
         self.db = db_session
+        self.redis = redis_client
         self.verifier = verifier or ScoringInvariantVerifier()
 
     async def get_active_policy(self) -> PolicyResponse:
-        """Retrieves the authoritative active risk policy, ordered by creation time."""
+        """Retrieves the authoritative active risk policy, with Redis caching."""
         with tracer.start_as_current_span("policy_service.get_active_policy"):
+            # Try Redis cache first
+            if self.redis is not None:
+                try:
+                    cached = await self.redis.get(ACTIVE_POLICY_CACHE_KEY)
+                    if cached:
+                        logger.debug("Active policy retrieved from Redis cache")
+                        return PolicyResponse.model_validate_json(cached)
+                except Exception as e:
+                    logger.warning("Redis cache read failed for active policy: %s", e)
+
+            # Fallback to database
             stmt = (
                 select(PolicyModel)
                 .where(PolicyModel.is_active.is_(True))
@@ -81,7 +99,21 @@ class PolicyManagementService:
             if policy_model is None:
                 raise PolicyNotFoundException(policy_identifier="ACTIVE")
 
-            return self._model_to_response(policy_model)
+            response = self._model_to_response(policy_model)
+
+            # Cache in Redis
+            if self.redis is not None:
+                try:
+                    await self.redis.set(
+                        ACTIVE_POLICY_CACHE_KEY,
+                        response.model_dump_json(),
+                        ex=ACTIVE_POLICY_CACHE_TTL,
+                    )
+                    logger.debug("Active policy cached in Redis with TTL %ss", ACTIVE_POLICY_CACHE_TTL)
+                except Exception as e:
+                    logger.warning("Redis cache write failed for active policy: %s", e)
+
+            return response
 
     async def get_policy_by_version(self, version: str) -> PolicyResponse:
         """Retrieves a specific policy by its immutable version identifier."""
@@ -107,7 +139,7 @@ class PolicyManagementService:
         include_inactive: bool = False,
         limit: int = 50,
         offset: int = 0,
-    ) -> List[PolicyResponse]:
+    ) -> list[PolicyResponse]:
         """Lists registered risk policies ordered chronologically."""
         with tracer.start_as_current_span("policy_service.list_policies"):
             stmt = select(PolicyModel)
@@ -123,7 +155,7 @@ class PolicyManagementService:
     async def create_policy(
         self,
         request: PolicyCreateRequest,
-        actor_identifier: Optional[str] = None,
+        actor_identifier: str | None = None,
     ) -> PolicyResponse:
         """
         Creates and registers a new Risk Policy.
@@ -180,6 +212,7 @@ class PolicyManagementService:
     async def activate_policy(self, version: str) -> PolicyResponse:
         """
         Activates a specific policy version and deactivates any other active policy atomically.
+        Invalidates the active policy cache.
         """
         with tracer.start_as_current_span("policy_service.activate_policy") as span:
             span.set_attribute("target_policy_version", version)
@@ -190,6 +223,14 @@ class PolicyManagementService:
                 policy_model.is_active = True
                 await self.db.flush()
                 logger.info("Activated policy version=%s", version)
+
+                # Invalidate Redis cache
+                if self.redis is not None:
+                    try:
+                        await self.redis.delete(ACTIVE_POLICY_CACHE_KEY)
+                        logger.debug("Active policy cache invalidated in Redis")
+                    except Exception as e:
+                        logger.warning("Redis cache invalidation failed: %s", e)
 
             return self._model_to_response(policy_model)
 
@@ -295,7 +336,7 @@ class PolicyManagementService:
             is_active=request.is_active,
         )
 
-    def _serialize_thresholds(self, thresholds: ThresholdConfig) -> Dict[str, Any]:
+    def _serialize_thresholds(self, thresholds: ThresholdConfig) -> dict[str, Any]:
         return {
             "tiers": [
                 {

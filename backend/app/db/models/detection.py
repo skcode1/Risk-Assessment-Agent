@@ -4,21 +4,24 @@ Provides PostgreSQL schema mapping, strict Decimal metrics constraints,
 foreign key cascades to assessments, and structured context storage.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
     CheckConstraint,
     DateTime,
-    Enum as SAEnum,
     Index,
     Numeric,
     String,
     Text,
 )
-from sqlalchemy.dialects.postgresql import JSONB, UUID as PGUUID
+from sqlalchemy import (
+    Enum as SAEnum,
+)
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -79,7 +82,7 @@ class DetectionModel(Base):
     )
 
     # Optional signature precision / sensor fidelity metric [0.0, 1.0]
-    fidelity: Mapped[Optional[Decimal]] = mapped_column(
+    fidelity: Mapped[Decimal | None] = mapped_column(
         Numeric(precision=4, scale=3, asdecimal=True),
         nullable=True,
     )
@@ -101,24 +104,24 @@ class DetectionModel(Base):
         index=True,
     )
 
-    destination_ip: Mapped[Optional[str]] = mapped_column(
+    destination_ip: Mapped[str | None] = mapped_column(
         String(45),
         nullable=True,
     )
 
-    hostname: Mapped[Optional[str]] = mapped_column(
+    hostname: Mapped[str | None] = mapped_column(
         String(255),
         nullable=True,
         index=True,
     )
 
-    raw_payload: Mapped[Optional[str]] = mapped_column(
+    raw_payload: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
 
     # Rich detection telemetry context (MITRE ATT&CK tags, process trees, environment hints)
-    context_data: Mapped[Dict[str, Any]] = mapped_column(
+    context_data: Mapped[dict[str, Any]] = mapped_column(
         JSONB,
         nullable=False,
         default=dict,
@@ -128,26 +131,26 @@ class DetectionModel(Base):
     detected_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
-        default=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
         index=True,
     )
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
-        default=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
         index=True,
     )
 
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
     )
 
     # Relationships
-    risk_assessments: Mapped[List["RiskAssessmentModel"]] = relationship(
+    risk_assessments: Mapped[list["RiskAssessmentModel"]] = relationship(
         "RiskAssessmentModel",
         back_populates="detection",
         cascade="all, delete-orphan",

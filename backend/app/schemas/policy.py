@@ -4,8 +4,8 @@ Enforces weights invariants (B + F + S + H = 1.0) and threshold mappings.
 Supports both flat API payloads and nested Domain/ORM representations.
 """
 
-from datetime import datetime, timezone
-from typing import Annotated, Any, Dict, List, Optional, Union
+from datetime import UTC, datetime
+from typing import Annotated, Any
 from uuid import UUID, uuid4
 
 from pydantic import (
@@ -116,7 +116,7 @@ class PolicyBase(BaseModel):
         Field(..., min_length=2, max_length=128, description="Human-readable policy name."),
     ]
     description: Annotated[
-        Optional[str],
+        str | None,
         Field(default=None, max_length=512, description="Operational scope or governance description."),
     ]
     weights: Annotated[
@@ -137,23 +137,23 @@ class PolicyCreateRequest(PolicyBase):
     """Ingestion schema expected by POST /api/v1/policies."""
     model_config = ConfigDict(extra="ignore", str_strip_whitespace=True)
 
-    policy_id: Annotated[Optional[UUID], Field(default=None)]
-    version: Annotated[Optional[Union[str, int]], Field(default="risk-policy-2026-01")]
-    endpoint_class_weights: Annotated[Dict[str, float], Field(default_factory=dict)]
-    metadata: Annotated[Dict[str, Any], Field(default_factory=dict)]
+    policy_id: Annotated[UUID | None, Field(default=None)]
+    version: Annotated[str | int | None, Field(default="risk-policy-2026-01")]
+    endpoint_class_weights: Annotated[dict[str, float], Field(default_factory=dict)]
+    metadata: Annotated[dict[str, Any], Field(default_factory=dict)]
 
 
 class PolicyUpdateRequest(BaseModel):
     """Schema for updating or patching an existing policy."""
     model_config = ConfigDict(extra="ignore", str_strip_whitespace=True)
 
-    name: Optional[str] = Field(default=None, min_length=2, max_length=128)
-    description: Optional[str] = Field(default=None, max_length=512)
-    weights: Optional[PolicyWeights] = None
-    thresholds: Optional[PolicyThresholds] = None
-    is_active: Optional[bool] = None
-    endpoint_class_weights: Optional[Dict[str, float]] = None
-    metadata: Optional[Dict[str, Any]] = None
+    name: str | None = Field(default=None, min_length=2, max_length=128)
+    description: str | None = Field(default=None, max_length=512)
+    weights: PolicyWeights | None = None
+    thresholds: PolicyThresholds | None = None
+    is_active: bool | None = None
+    endpoint_class_weights: dict[str, float] | None = None
+    metadata: dict[str, Any] | None = None
 
 
 class PolicyResponse(PolicyBase):
@@ -161,16 +161,16 @@ class PolicyResponse(PolicyBase):
     model_config = ConfigDict(from_attributes=True, extra="ignore", populate_by_name=True)
 
     policy_id: UUID = Field(default_factory=uuid4)
-    version: Union[str, int] = Field(default="risk-policy-2026-01")
-    endpoint_class_weights: Dict[str, float] = Field(default_factory=dict)
-    metadata: Dict[str, Any] = Field(default_factory=dict)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    version: str | int = Field(default="risk-policy-2026-01")
+    endpoint_class_weights: dict[str, float] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class PolicyListResponse(BaseModel):
     """Paginated or list wrapper for multiple risk policies."""
     model_config = ConfigDict(from_attributes=True, extra="ignore")
 
-    items: List[PolicyResponse] = Field(default_factory=list)
+    items: list[PolicyResponse] = Field(default_factory=list)
     total: int = Field(default=0, ge=0)

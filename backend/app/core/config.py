@@ -1,13 +1,8 @@
-"""
-Application Configuration and Settings Management.
-Reads and validates hierarchical environment configurations with URL-safe
-credential encoding, nested domain settings, and strict secret validation.
-"""
 
-from functools import lru_cache
 import os
+from functools import lru_cache
 from pathlib import Path
-from typing import Any, List, Optional, Union
+from typing import Any
 from urllib.parse import quote_plus
 
 from pydantic import Field, SecretStr, field_validator, model_validator
@@ -48,16 +43,24 @@ class AppSettings(BaseSettings):
     ENVIRONMENT: str = "production"
     DEBUG: bool = False
     LOG_LEVEL: str = "INFO"
-    ALLOWED_ORIGINS: Union[List[str], str] = ["*"]
+    ALLOWED_ORIGINS: list[str] | str = ["*"]
+    SLIDING_WINDOW_SECONDS: int = 3600
 
     @field_validator("ALLOWED_ORIGINS", mode="before")
     @classmethod
-    def assemble_cors_origins(cls, v: Any) -> List[str]:
+    def assemble_cors_origins(cls, v: Any) -> list[str]:
         if isinstance(v, str):
             return [origin.strip() for origin in v.split(",") if origin.strip()]
         if isinstance(v, list):
             return v
         return ["*"]
+
+    @field_validator("SLIDING_WINDOW_SECONDS", mode="before")
+    @classmethod
+    def validate_sliding_window(cls, v: Any) -> int:
+        if isinstance(v, str):
+            return int(v)
+        return int(v)
 
     model_config = SettingsConfigDict(
         env_file=ENV_FILES,
@@ -85,12 +88,12 @@ class DatabaseSettings(BaseSettings):
     DB_POOL_RECYCLE: int = 1800
 
     # Backwards compatibility and alternative environment names
-    POSTGRES_POOL_SIZE: Optional[int] = None
-    POSTGRES_MAX_OVERFLOW: Optional[int] = None
-    POSTGRES_POOL_TIMEOUT: Optional[int] = None
+    POSTGRES_POOL_SIZE: int | None = None
+    POSTGRES_MAX_OVERFLOW: int | None = None
+    POSTGRES_POOL_TIMEOUT: int | None = None
 
-    DATABASE_URL: Optional[str] = None
-    _ASYNC_URI_OVERRIDE: Optional[str] = None
+    DATABASE_URL: str | None = None
+    _ASYNC_URI_OVERRIDE: str | None = None
 
     @model_validator(mode="before")
     @classmethod
@@ -144,9 +147,9 @@ class RedisSettings(BaseSettings):
 
     REDIS_HOST: str = "localhost"
     REDIS_PORT: int = 6379
-    REDIS_PASSWORD: Optional[SecretStr] = None
+    REDIS_PASSWORD: SecretStr | None = None
     REDIS_DB: int = 0
-    REDIS_URL: Optional[str] = None
+    REDIS_URL: str | None = None
 
     @property
     def connection_url(self) -> str:
@@ -168,7 +171,7 @@ class OpenSearchSettings(BaseSettings):
 
     OPENSEARCH_HOST: str = "localhost"
     OPENSEARCH_PORT: int = 9200
-    OPENSEARCH_USER: Optional[str] = "admin"
+    OPENSEARCH_USER: str | None = "admin"
     OPENSEARCH_PASSWORD: SecretStr = SecretStr("admin")
     OPENSEARCH_USE_SSL: bool = False
     OPENSEARCH_VERIFY_CERTS: bool = False
@@ -184,7 +187,17 @@ class SecuritySettings(BaseSettings):
 
     JWT_SECRET_KEY: SecretStr = Field(..., min_length=32)
     JWT_ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=60, ge=5, le=1440)
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=15, ge=5, le=1440)
+    
+    # RS256 / JWKS settings (optional, for production)
+    JWT_PRIVATE_KEY: SecretStr | None = Field(default=None, description="PEM-encoded RSA private key for RS256 signing")
+    JWT_PUBLIC_KEY: SecretStr | None = Field(default=None, description="PEM-encoded RSA public key for RS256 validation (alternative to JWKS)")
+    JWT_JWKS_URL: str | None = Field(default=None, description="JWKS endpoint URL for RS256 key rotation")
+    JWT_ISSUER: str | None = Field(default=None, description="Expected JWT issuer claim")
+    JWT_AUDIENCE: str | None = Field(default=None, description="Expected JWT audience claim")
+    
+    # Refresh token settings
+    REFRESH_TOKEN_EXPIRE_DAYS: int = Field(default=7, ge=1, le=90)
 
     @field_validator("JWT_SECRET_KEY")
     @classmethod
@@ -222,6 +235,8 @@ class LLMSettings(BaseSettings):
     ANTHROPIC_MODEL: str = "claude-3-5-sonnet-20241022"
     TEMPERATURE: float = 0.0
     MAX_TOKENS: int = 1024
+    LLM_REQUEST_TIMEOUT: float = 30.0
+    LLM_MAX_RETRIES: int = 3
 
     model_config = SettingsConfigDict(
         env_file=ENV_FILES,

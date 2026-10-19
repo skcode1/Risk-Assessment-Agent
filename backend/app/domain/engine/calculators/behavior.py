@@ -5,13 +5,15 @@ into a bounded 0-100 sub-score for the deterministic risk scoring kernel.
 """
 
 from abc import ABC, abstractmethod
+from collections.abc import Mapping
 from dataclasses import dataclass
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
-from typing import Any, Dict, Mapping, Optional
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
+from typing import Any
 
 from app.domain.models.detection import DetectionEvent, DetectionMetrics
 from app.domain.models.enums import DetectionSeverity
 from app.domain.models.investigation import InvestigationResult
+from app.domain.models.policy import RiskPolicy
 
 
 class BehaviorNormalizationStrategy(ABC):
@@ -21,13 +23,12 @@ class BehaviorNormalizationStrategy(ABC):
     def calculate(
         self,
         detection: DetectionEvent,
-        investigation: Optional[InvestigationResult] = None,
-        parameters: Optional[Mapping[str, Any]] = None,
+        investigation: InvestigationResult | None = None,
+        parameters: Mapping[str, Any] | None = None,
     ) -> Decimal:
         """
         Calculate the normalized Behavior sub-score bounded to [0.0, 100.0].
         """
-        pass
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,8 +74,8 @@ class DynamicBehaviorCalculator(BehaviorNormalizationStrategy):
 
     def __init__(
         self,
-        default_config: Optional[ConfidenceScaleConfig] = None,
-        severity_factors: Optional[Mapping[DetectionSeverity, Decimal]] = None,
+        default_config: ConfidenceScaleConfig | None = None,
+        severity_factors: Mapping[DetectionSeverity, Decimal] | None = None,
     ) -> None:
         self._config = default_config or ConfidenceScaleConfig()
         self._severity_factors = (
@@ -84,8 +85,9 @@ class DynamicBehaviorCalculator(BehaviorNormalizationStrategy):
     def calculate(
         self,
         detection: DetectionEvent,
-        investigation: Optional[InvestigationResult] = None,
-        parameters: Optional[Mapping[str, Any]] = None,
+        investigation: InvestigationResult | None = None,
+        policy: RiskPolicy | None = None,
+        parameters: Mapping[str, Any] | None = None,
     ) -> Decimal:
         """
         Executes dynamic normalization of detection confidence into a Decimal bounded [0.0, 100.0].
@@ -104,7 +106,7 @@ class DynamicBehaviorCalculator(BehaviorNormalizationStrategy):
             except (InvalidOperation, TypeError, ValueError) as err:
                 raise ValueError(f"Unable to parse detection confidence into Decimal: {err}") from err
 
-        config = self._resolve_runtime_config(parameters)
+        config = self._resolve_runtime_config(policy, parameters)
 
         normalized_behavior = self._normalize_confidence(
             raw_confidence=raw_confidence,
@@ -157,7 +159,7 @@ class DynamicBehaviorCalculator(BehaviorNormalizationStrategy):
         if raw_confidence < Decimal("0.0"):
             return Decimal("0.0")
 
-        if raw_confidence <= source_max and source_max < target_max:
+        if raw_confidence <= source_max < target_max:
             scaled = (raw_confidence / source_max) * target_max
             return scaled
 
@@ -203,26 +205,38 @@ class DynamicBehaviorCalculator(BehaviorNormalizationStrategy):
         return clamped.quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
 
     def _resolve_runtime_config(
-        self, parameters: Optional[Mapping[str, Any]]
+        self,
+        policy: RiskPolicy | None,
+        parameters: Mapping[str, Any] | None
     ) -> ConfidenceScaleConfig:
         """Extracts runtime overrides from request context or policy governance metadata."""
-        if not parameters:
+        merged_params: dict[str, Any] = {}
+
+        if policy and hasattr(policy, "metadata") and isinstance(policy.metadata, dict):
+            behavior_policy_meta = policy.metadata.get("behavior_config", {})
+            if isinstance(behavior_policy_meta, dict):
+                merged_params.update(behavior_policy_meta)
+
+        if parameters:
+            merged_params.update(parameters)
+
+        if not merged_params:
             return self._config
 
         try:
             return ConfidenceScaleConfig(
-                source_scale_max=Decimal(str(parameters.get("source_scale_max", self._config.source_scale_max))),
-                target_scale_max=Decimal(str(parameters.get("target_scale_max", self._config.target_scale_max))),
+                source_scale_max=Decimal(str(merged_params.get("source_scale_max", self._config.source_scale_max))),
+                target_scale_max=Decimal(str(merged_params.get("target_scale_max", self._config.target_scale_max))),
                 apply_fidelity_adjustment=bool(
-                    parameters.get("apply_fidelity_adjustment", self._config.apply_fidelity_adjustment)
+                    merged_params.get("apply_fidelity_adjustment", self._config.apply_fidelity_adjustment)
                 ),
-                fidelity_weight=Decimal(str(parameters.get("fidelity_weight", self._config.fidelity_weight))),
+                fidelity_weight=Decimal(str(merged_params.get("fidelity_weight", self._config.fidelity_weight))),
                 apply_severity_damping=bool(
-                    parameters.get("apply_severity_damping", self._config.apply_severity_damping)
+                    merged_params.get("apply_severity_damping", self._config.apply_severity_damping)
                 ),
-                severity_weight=Decimal(str(parameters.get("severity_weight", self._config.severity_weight))),
+                severity_weight=Decimal(str(merged_params.get("severity_weight", self._config.severity_weight))),
                 apply_severity_hint_blend=bool(
-                    parameters.get(
+                    merged_params.get(
                         "apply_severity_hint_blend",
                         self._config.apply_severity_hint_blend,
                     )

@@ -1,19 +1,12 @@
-"""
-Threat Intelligence and Telemetry Enrichment Agent.
-Provides asynchronous external enrichment (OpenSearch, Redis, Threat Intel feeds)
-and formats read-only telemetry payloads for XAI prompt templating without mutating
-deterministic scoring baselines.
-"""
 
-from dataclasses import asdict, dataclass
-from decimal import Decimal
+
 import logging
-import time
-from typing import Any, Dict, List, Optional
+from dataclasses import asdict, dataclass
+from typing import Any
 from uuid import UUID
 
-from opensearchpy import AsyncOpenSearch
 import redis.asyncio as aioredis
+from opensearchpy import AsyncOpenSearch
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,7 +15,7 @@ from app.core.telemetry import get_tracer
 from app.db.models.assessment import RiskAssessmentModel
 from app.db.models.detection import DetectionModel
 from app.db.models.investigation import InvestigationModel
-from app.domain.models.enums import EndpointClass, RiskCategory
+from app.domain.models.enums import EndpointClass
 
 logger = logging.getLogger(__name__)
 tracer = get_tracer()
@@ -31,7 +24,7 @@ tracer = get_tracer()
 class EnrichmentException(BaseAppException):
     """Raised when telemetry or threat context enrichment fails."""
 
-    def __init__(self, message: str, context: Optional[Dict[str, Any]] = None) -> None:
+    def __init__(self, message: str, context: dict[str, Any] | None = None) -> None:
         super().__init__(
             message=message,
             error_code="ENRICHMENT_ERROR",
@@ -44,13 +37,13 @@ class EnrichmentException(BaseAppException):
 class EnrichedContextBundle:
     """Read-only bundle passed into Jinja2 narrative templates."""
 
-    assessment: Dict[str, Any]
-    detection: Dict[str, Any]
-    investigation: Dict[str, Any]
-    analyst_override: Optional[Dict[str, Any]]
-    threat_intel_summary: Dict[str, Any]
+    assessment: dict[str, Any]
+    detection: dict[str, Any]
+    investigation: dict[str, Any]
+    analyst_override: dict[str, Any] | None
+    threat_intel_summary: dict[str, Any]
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
 
@@ -63,8 +56,8 @@ class TelemetryEnrichmentAgent:
     def __init__(
         self,
         db_session: AsyncSession,
-        redis_client: Optional[aioredis.Redis] = None,
-        opensearch_client: Optional[AsyncOpenSearch] = None,
+        redis_client: aioredis.Redis | None = None,
+        opensearch_client: AsyncOpenSearch | None = None,
     ) -> None:
         self.db = db_session
         self.redis = redis_client
@@ -85,7 +78,7 @@ class TelemetryEnrichmentAgent:
                 RiskAssessmentModel.assessment_id == assessment_id
             )
             result = await self.db.execute(stmt)
-            assessment: Optional[RiskAssessmentModel] = result.scalars().first()
+            assessment: RiskAssessmentModel | None = result.scalars().first()
 
             if assessment is None:
                 raise EnrichmentException(
@@ -98,7 +91,7 @@ class TelemetryEnrichmentAgent:
                 DetectionModel.event_id == assessment.detection_event_id
             )
             det_result = await self.db.execute(det_stmt)
-            detection: Optional[DetectionModel] = det_result.scalars().first()
+            detection: DetectionModel | None = det_result.scalars().first()
 
             if detection is None:
                 raise EnrichmentException(
@@ -113,7 +106,7 @@ class TelemetryEnrichmentAgent:
                 .order_by(InvestigationModel.created_at.desc())
             )
             inv_result = await self.db.execute(inv_stmt)
-            investigation: Optional[InvestigationModel] = inv_result.scalars().first()
+            investigation: InvestigationModel | None = inv_result.scalars().first()
 
             # 4. Gather Threat Intelligence and Temporal Signals
             threat_intel = await self._resolve_threat_intel(detection.source_ip)
@@ -202,12 +195,12 @@ class TelemetryEnrichmentAgent:
                 threat_intel_summary=threat_intel,
             )
 
-    async def _resolve_threat_intel(self, source_ip: str) -> Dict[str, Any]:
+    async def _resolve_threat_intel(self, source_ip: str) -> dict[str, Any]:
         """
         Queries Redis cache and OpenSearch indices to obtain historical
         indicator classifications and reputation summaries for the target IP.
         """
-        intel_payload: Dict[str, Any] = {
+        intel_payload: dict[str, Any] = {
             "source_ip": source_ip,
             "is_known_malicious": False,
             "reputation_tags": [],

@@ -5,8 +5,9 @@ IEEE-754 precision immunity, and non-null guarantees.
 """
 
 from decimal import Decimal
-from typing import Any, Dict
+from typing import Any
 from uuid import uuid4
+
 import pytest
 
 from app.domain.engine.invariants import (
@@ -36,10 +37,8 @@ from app.domain.models.investigation import (
     TouchedEndpoint,
 )
 from app.domain.models.policy import (
-    CategoryThresholdRange,
     PolicyWeights,
     RiskPolicy,
-    ThresholdConfig,
 )
 
 
@@ -229,7 +228,7 @@ class TestFullPipelineEvaluation:
         invariant_verifier.verify_assessment(assessment, spec_default_policy)
 
         # Output schema checks
-        output_payload: Dict[str, Any] = assessment.to_spec_dict()
+        output_payload: dict[str, Any] = assessment.to_spec_dict()
         assert output_payload["source_ip"] == "1.2.3.4"
         assert isinstance(output_payload["risk_score"], float)
         assert output_payload["rating"] in {cat.value for cat in RiskCategory}

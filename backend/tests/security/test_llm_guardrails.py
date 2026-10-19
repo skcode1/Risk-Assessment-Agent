@@ -6,11 +6,15 @@ score alteration attempts, hallucinated sub-scores, and policy tampering are blo
 """
 
 from decimal import Decimal
-from typing import Any, Dict
+from typing import Any
 from uuid import uuid4
+
 import pytest
 
-from app.domain.engine.invariants import InvariantViolationError, ScoringInvariantVerifier
+from app.domain.engine.invariants import (
+    InvariantViolationError,
+    ScoringInvariantVerifier,
+)
 from app.domain.models.assessment import (
     AppliedPolicySnapshot,
     RiskAssessment,
@@ -29,7 +33,7 @@ from app.schemas.explanation import (
 class LLMGuardrailViolationError(ValueError):
     """Raised when an LLM explanation output violates security boundary guardrails."""
 
-    def __init__(self, rule_name: str, message: str, details: Dict[str, Any]) -> None:
+    def __init__(self, rule_name: str, message: str, details: dict[str, Any]) -> None:
         self.rule_name = rule_name
         self.details = details
         super().__init__(f"[{rule_name}] Guardrail Violation: {message} | Details: {details}")
@@ -146,6 +150,7 @@ def authoritative_assessment(spec_default_policy: RiskPolicy) -> RiskAssessment:
                 "sensitivity": Decimal("0.20"),
                 "history": Decimal("0.10"),
             },
+            thresholds=spec_default_policy.thresholds.to_dict(),
         ),
     )
 

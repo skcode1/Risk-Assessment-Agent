@@ -1,21 +1,23 @@
 """
 Application entrypoint and factory module.
 Configures FastAPI lifecycle, connection pools, Prometheus metrics,
-CORS security policies, distributed tracing, and system health probes.
+CORS security policies, distributed tracing, rate limiting, and system health probes.
 """
 
-from collections.abc import AsyncGenerator
-from contextlib import asynccontextmanager
 import logging
 import os
 import time
-from typing import Callable, List
+from collections.abc import AsyncGenerator, Callable
+from contextlib import asynccontextmanager
 from uuid import uuid4
 
 from fastapi import FastAPI, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from prometheus_fastapi_instrumentator import Instrumentator
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 
 from app.api.v1.router import api_router
 from app.core.config import settings
@@ -34,8 +36,15 @@ from app.core.telemetry import setup_telemetry
 
 logger = logging.getLogger(__name__)
 
+# Rate limiter instance
+limiter = Limiter(
+    key_func=get_remote_address,
+    default_limits=[],
+    storage_uri=os.getenv("RATE_LIMIT_STORAGE_URI", "memory://"),
+)
 
-def _parse_allowed_origins() -> List[str]:
+
+def _parse_allowed_origins() -> list[str]:
     """
     Parses allowed CORS origins dynamically from the ALLOWED_ORIGINS
     environment variable or application settings.
@@ -86,11 +95,15 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title=getattr(settings.app, "PROJECT_NAME", "Cyber Risk Orchestration Engine"),
         version=getattr(settings.app, "VERSION", "1.0.0"),
-        docs_url="/docs" if is_debug else "/docs",
+        docs_url="/docs" if is_debug else None,
         redoc_url="/redoc" if is_debug else None,
         openapi_url="/openapi.json",
         lifespan=lifespan,
     )
+
+    # Rate limiting
+    app.state.limiter = limiter
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
     @app.middleware("http")
     async def request_id_middleware(request: Request, call_next: Callable) -> Response:
@@ -115,14 +128,16 @@ def create_app() -> FastAPI:
         expose_headers=["X-Request-ID", "X-Response-Time-MS"],
     )
 
-    # Only enable remote OTLP exporter when OTEL_EXPORTER_OTLP_ENDPOINT is explicitly configured
+    # Always initialize telemetry; OTEL_EXPORTER_OTLP_ENDPOINT configures the exporter
     otlp_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
-    if otlp_endpoint and os.getenv("OTEL_SDK_DISABLED", "false").lower() != "true":
-        try:
-            setup_telemetry(app=app, otlp_endpoint=otlp_endpoint)
+    try:
+        setup_telemetry(app=app, otlp_endpoint=otlp_endpoint)
+        if otlp_endpoint:
             logger.info("OpenTelemetry tracing registered for endpoint: %s", otlp_endpoint)
-        except Exception as exc:
-            logger.warning("Telemetry setup deferred or skipped: %s", exc)
+        else:
+            logger.info("OpenTelemetry tracing initialized (no OTLP exporter configured)")
+    except Exception as exc:
+        logger.warning("Telemetry setup deferred or skipped: %s", exc)
 
     register_exception_handlers(app)
 
@@ -145,7 +160,8 @@ def create_app() -> FastAPI:
         summary="Liveness Probe",
     )
     @app.get("/api/v1/health/liveness", include_in_schema=False)
-    async def health_live() -> dict:
+    @limiter.limit("100/minute")
+    async def health_live(request: Request) -> dict:
         return {
             "status": "UP",
             "timestamp": time.time(),
@@ -157,7 +173,8 @@ def create_app() -> FastAPI:
         summary="Readiness Probe",
     )
     @app.get("/api/v1/health/readiness", include_in_schema=False)
-    async def health_ready() -> JSONResponse:
+    @limiter.limit("30/minute")
+    async def health_ready(request: Request) -> JSONResponse:
         db_healthy = await verify_database_connection()
         redis_healthy = await verify_redis_connection()
 
@@ -176,9 +193,8 @@ def create_app() -> FastAPI:
             content=response_payload,
         )
 
-    # Mount both /api/v1 (Ingress/Docker) and /v1 (Standard API & Test Suite)
-    app.include_router(api_router, prefix="/api/v1")
-    app.include_router(api_router, prefix="/v1", include_in_schema=False)
+    # Mount API under /v1 prefix (standard API & Test Suite)
+    app.include_router(api_router, prefix="/v1")
 
     return app
 

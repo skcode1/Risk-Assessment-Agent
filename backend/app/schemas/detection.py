@@ -4,9 +4,9 @@ Fully aligned with canonical schemas/detection/detection-event-v1.json.
 Provides complete ingestion, audit detail, query filter, and list serialization models.
 """
 
-from datetime import datetime, timezone
-from typing import Annotated, Any, Dict, List, Optional
-from uuid import UUID, uuid4
+from datetime import UTC, datetime
+from typing import Annotated, Any
+from uuid import UUID
 
 from pydantic import (
     BaseModel,
@@ -51,7 +51,7 @@ class DetectionBase(BaseModel):
         ),
     ]
     metadata: Annotated[
-        Dict[str, Any],
+        dict[str, Any],
         Field(
             default_factory=dict,
             description="Contextual metadata, source headers, or sensor telemetry attributes.",
@@ -82,7 +82,7 @@ class DetectionCreateRequest(DetectionBase):
     )
 
     detection_id: Annotated[
-        Optional[UUID],
+        UUID | None,
         Field(
             default=None,
             description="Client-supplied correlation ID. Automatically generated if omitted.",
@@ -91,7 +91,7 @@ class DetectionCreateRequest(DetectionBase):
     timestamp: Annotated[
         datetime,
         Field(
-            default_factory=lambda: datetime.now(timezone.utc),
+            default_factory=lambda: datetime.now(UTC),
             description="UTC timestamp representing when the signal was initially captured.",
         ),
     ]
@@ -100,8 +100,8 @@ class DetectionCreateRequest(DetectionBase):
     @classmethod
     def ensure_utc(cls, v: datetime) -> datetime:
         if v.tzinfo is None:
-            return v.replace(tzinfo=timezone.utc)
-        return v.astimezone(timezone.utc)
+            return v.replace(tzinfo=UTC)
+        return v.astimezone(UTC)
 
 
 class DetectionResponse(DetectionBase):
@@ -119,7 +119,7 @@ class DetectionResponse(DetectionBase):
     created_at: Annotated[
         datetime,
         Field(
-            default_factory=lambda: datetime.now(timezone.utc),
+            default_factory=lambda: datetime.now(UTC),
             description="Database record persistence timestamp.",
         ),
     ]
@@ -133,7 +133,7 @@ class DetectionDetailResponse(DetectionResponse):
     model_config = ConfigDict(from_attributes=True)
 
     investigation_id: Annotated[
-        Optional[UUID],
+        UUID | None,
         Field(
             default=None,
             description="Linked investigation record UUID if automatic or manual triage was initiated.",
@@ -147,21 +147,21 @@ class DetectionDetailResponse(DetectionResponse):
         ),
     ]
     severity_level: Annotated[
-        Optional[str],
+        str | None,
         Field(
             default=None,
             description="Derived raw signal severity tier (e.g., LOW, MEDIUM, HIGH, CRITICAL).",
         ),
     ]
     raw_payload: Annotated[
-        Dict[str, Any],
+        dict[str, Any],
         Field(
             default_factory=dict,
             description="Complete un-sanitized ingestion payload for forensic audit trails.",
         ),
     ]
     tags: Annotated[
-        List[str],
+        list[str],
         Field(
             default_factory=list,
             description="SecOps categorization tags, environment labels, or MITRE ATT&CK hints.",
@@ -169,7 +169,7 @@ class DetectionDetailResponse(DetectionResponse):
         ),
     ]
     updated_at: Annotated[
-        Optional[datetime],
+        datetime | None,
         Field(
             default=None,
             description="Timestamp of the most recent modification or status update.",
@@ -182,7 +182,7 @@ class DetectionListResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     items: Annotated[
-        List[DetectionResponse],
+        list[DetectionResponse],
         Field(..., description="Array of detection records matching the query parameters."),
     ]
     total: Annotated[
@@ -203,15 +203,15 @@ class DetectionFilterParams(BaseModel):
     """Query parameter validation model for detection searches."""
     model_config = ConfigDict(extra="forbid")
 
-    source_ip: Optional[str] = Field(default=None, description="Filter by exact source IP address.")
-    event_type: Optional[str] = Field(default=None, description="Filter by alert signature or event category.")
-    min_confidence: Optional[float] = Field(
+    source_ip: str | None = Field(default=None, description="Filter by exact source IP address.")
+    event_type: str | None = Field(default=None, description="Filter by alert signature or event category.")
+    min_confidence: float | None = Field(
         default=None,
         ge=0.0,
         le=1.0,
         description="Filter by minimum detection confidence threshold.",
     )
-    start_time: Optional[datetime] = Field(default=None, description="Inclusive starting UTC timestamp.")
-    end_time: Optional[datetime] = Field(default=None, description="Inclusive ending UTC timestamp.")
+    start_time: datetime | None = Field(default=None, description="Inclusive starting UTC timestamp.")
+    end_time: datetime | None = Field(default=None, description="Inclusive ending UTC timestamp.")
     limit: int = Field(default=50, ge=1, le=500, description="Maximum items to return.")
     offset: int = Field(default=0, ge=0, description="Offset index for pagination.")

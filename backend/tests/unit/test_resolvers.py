@@ -6,7 +6,7 @@ LOW, MEDIUM, HIGH, and CRITICAL tiers.
 """
 
 from decimal import Decimal
-from typing import Dict, List, Tuple
+
 import pytest
 
 from app.domain.engine.resolver import (
@@ -233,7 +233,7 @@ class TestCustomAndDynamicPolicyThresholds:
 
     def test_dynamic_profile_from_mapping_construction(self) -> None:
         """Verifies programmatic construction of DynamicThresholdProfile via dictionary mapping."""
-        profile_map: Dict[str, List[int]] = {
+        profile_map: dict[str, list[int]] = {
             "LOW": [0, 49],
             "MEDIUM": [50, 69],
             "HIGH": [70, 89],
@@ -251,7 +251,7 @@ class TestCustomAndDynamicPolicyThresholds:
     def test_reject_invalid_threshold_profile_bounds(self) -> None:
         """Ensures that gap-ridden or overlapping threshold profiles raise ValueError."""
         # Overlapping tiers
-        overlapping_tiers: Tuple[ThresholdTier, ...] = (
+        overlapping_tiers: tuple[ThresholdTier, ...] = (
             ThresholdTier(category=RiskCategory.LOW, min_score=Decimal("0.0"), max_score=Decimal("50.0")),
             ThresholdTier(category=RiskCategory.HIGH, min_score=Decimal("45.0"), max_score=Decimal("100.0")),
         )
@@ -259,7 +259,7 @@ class TestCustomAndDynamicPolicyThresholds:
             DynamicThresholdProfile(tiers=overlapping_tiers)
 
         # Non-zero start bound
-        invalid_start_tiers: Tuple[ThresholdTier, ...] = (
+        invalid_start_tiers: tuple[ThresholdTier, ...] = (
             ThresholdTier(category=RiskCategory.LOW, min_score=Decimal("10.0"), max_score=Decimal("100.0")),
         )
         with pytest.raises(ValueError, match="must start at exactly 0.0"):

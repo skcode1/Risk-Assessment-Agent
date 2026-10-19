@@ -11,10 +11,10 @@ from app.db.models.investigation import InvestigationModel
 from app.db.models.policy import PolicyModel
 
 __all__ = [
-    "RiskAssessmentModel",
     "AuditLogModel",
     "DetectionModel",
-    "RiskExplanationModel",
     "InvestigationModel",
     "PolicyModel",
+    "RiskAssessmentModel",
+    "RiskExplanationModel",
 ]

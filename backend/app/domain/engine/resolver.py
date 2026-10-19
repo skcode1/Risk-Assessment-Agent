@@ -5,9 +5,10 @@ LOW, MEDIUM, HIGH, or CRITICAL based on versioned, configurable policy threshold
 """
 
 from abc import ABC, abstractmethod
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
-from typing import Any, Mapping, Optional, Sequence, Tuple
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
+from typing import Any
 
 from app.domain.models.enums import RiskCategory
 from app.domain.models.policy import RiskPolicy, ThresholdConfig
@@ -20,13 +21,12 @@ class BaseRiskCategoryResolver(ABC):
     def resolve(
         self,
         score: Decimal,
-        policy: Optional[RiskPolicy] = None,
-        threshold_config: Optional[ThresholdConfig] = None,
+        policy: RiskPolicy | None = None,
+        threshold_config: ThresholdConfig | None = None,
     ) -> RiskCategory:
         """
         Maps a score strictly bounded within [0.0, 100.0] to a RiskCategory enum.
         """
-        pass
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,7 +68,7 @@ class DynamicThresholdProfile:
     Container for an ordered collection of category threshold tiers.
     Validates range order, step gaps, and domain boundaries.
     """
-    tiers: Tuple[ThresholdTier, ...]
+    tiers: tuple[ThresholdTier, ...]
 
     def __post_init__(self) -> None:
         if not self.tiers:
@@ -153,14 +153,14 @@ class DynamicRiskCategoryResolver(BaseRiskCategoryResolver):
       3. Injected default profile matching documented specification thresholds
     """
 
-    def __init__(self, default_profile: Optional[DynamicThresholdProfile] = None) -> None:
+    def __init__(self, default_profile: DynamicThresholdProfile | None = None) -> None:
         self._default_profile = default_profile or self._build_default_specification_profile()
 
     def resolve(
         self,
         score: Decimal,
-        policy: Optional[RiskPolicy] = None,
-        threshold_config: Optional[ThresholdConfig] = None,
+        policy: RiskPolicy | None = None,
+        threshold_config: ThresholdConfig | None = None,
     ) -> RiskCategory:
         """
         Resolves score S in [0.0, 100.0] to a RiskCategory.

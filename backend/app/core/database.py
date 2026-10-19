@@ -1,13 +1,9 @@
 from sqlalchemy.pool import NullPool
-"""
-Core Database Configuration and Session Management Module.
-Implements asynchronous connection pooling using SQLAlchemy 2.0 with the asyncpg driver.
-Provides resilient session factories, engine lifecycle management, and FastAPI dependency injectors.
-"""
 
-from collections.abc import AsyncGenerator
+
+
 import logging
-from typing import Any
+from collections.abc import AsyncGenerator
 
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
@@ -26,7 +22,6 @@ logger = logging.getLogger(__name__)
 
 class Base(DeclarativeBase):
     """Base declarative class for all SQLAlchemy ORM models."""
-    pass
 
 
 def create_app_engine() -> AsyncEngine:

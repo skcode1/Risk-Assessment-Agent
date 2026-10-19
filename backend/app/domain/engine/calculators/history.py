@@ -4,11 +4,12 @@ Normalizes historical security incident counts for a source entity into a bounde
 via deterministic scaling functions (linear saturation, exponential risk ramp, or logarithmic curves).
 """
 
-from abc import ABC, abstractmethod
-from dataclasses import dataclass
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 import math
-from typing import Any, Mapping, Optional
+from abc import ABC, abstractmethod
+from collections.abc import Mapping
+from dataclasses import dataclass
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
+from typing import Any
 
 from app.domain.models.investigation import InvestigationResult
 from app.domain.models.policy import RiskPolicy
@@ -21,13 +22,12 @@ class HistoryMappingStrategy(ABC):
     def calculate(
         self,
         investigation: InvestigationResult,
-        policy: Optional[RiskPolicy] = None,
-        parameters: Optional[Mapping[str, Any]] = None,
+        policy: RiskPolicy | None = None,
+        parameters: Mapping[str, Any] | None = None,
     ) -> Decimal:
         """
         Calculate the normalized History sub-score bounded to [0.0, 100.0].
         """
-        pass
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,15 +64,15 @@ class DynamicHistoryCalculator(HistoryMappingStrategy):
 
     def __init__(
         self,
-        default_config: Optional[HistoryScaleConfig] = None,
+        default_config: HistoryScaleConfig | None = None,
     ) -> None:
         self._config = default_config or HistoryScaleConfig()
 
     def calculate(
         self,
         investigation: InvestigationResult,
-        policy: Optional[RiskPolicy] = None,
-        parameters: Optional[Mapping[str, Any]] = None,
+        policy: RiskPolicy | None = None,
+        parameters: Mapping[str, Any] | None = None,
     ) -> Decimal:
         """
         Calculates normalized History sub-score:
@@ -169,8 +169,8 @@ class DynamicHistoryCalculator(HistoryMappingStrategy):
 
     def _resolve_config(
         self,
-        policy: Optional[RiskPolicy],
-        parameters: Optional[Mapping[str, Any]],
+        policy: RiskPolicy | None,
+        parameters: Mapping[str, Any] | None,
     ) -> HistoryScaleConfig:
         """Dynamically extracts configuration parameters from request context or policy metadata."""
         merged_params: dict[str, Any] = {}

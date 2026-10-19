@@ -1,0 +1,181 @@
+# Prometheus Configuration for Cyber Risk Orchestration Engine
+# Scrapes metrics from the risk engine, OpenTelemetry collector, and infrastructure
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 30s
+  external_labels:
+    cluster: 'cyber-risk-engine'
+    environment: 'production'
+
+# Alertmanager configuration (if using external Alertmanager)
+# alerting:
+#   alertmanagers:
+#     - static_configs:
+#         - targets: ['alertmanager:9093']
+
+# Rule files
+rule_files:
+  - '/etc/prometheus/rules/*.yaml'
+
+# Scrape configurations
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Risk Engine API metrics
+  - job_name: 'risk-engine'
+    kubernetes_sd_configs:
+      - role: pod
+        namespaces:
+          names:
+            - cyber-risk-engine
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+        action: keep
+        regex: true
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+        action: replace
+        target_label: __metrics_path__
+        regex: (.+)
+      - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+        action: replace
+        regex: ([^:]+)(?::\d+)?;(\d+)
+        replacement: $1:$2
+        target_label: __address__
+      - action: labelmap
+        regex: __meta_kubernetes_pod_label_(.+)
+      - source_labels: [__meta_kubernetes_namespace]
+        action: replace
+        target_label: kubernetes_namespace
+      - source_labels: [__meta_kubernetes_pod_name]
+        action: replace
+        target_label: kubernetes_pod_name
+
+  # OpenTelemetry Collector metrics
+  - job_name: 'otel-collector'
+    kubernetes_sd_configs:
+      - role: pod
+        namespaces:
+          names:
+            - cyber-risk-engine
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_label_app]
+        action: keep
+        regex: otel-collector
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_port]
+        action: replace
+        target_label: __address__
+        regex: (.+)
+        replacement: ${1}:8888
+
+  # PostgreSQL metrics (via postgres_exporter)
+  - job_name: 'postgres'
+    kubernetes_sd_configs:
+      - role: pod
+        namespaces:
+          names:
+            - cyber-risk-engine
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_label_app]
+        action: keep
+        regex: postgres
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_port]
+        action: replace
+        target_label: __address__
+        regex: (.+)
+        replacement: ${1}:9187
+
+  # Redis metrics (via redis_exporter)
+  - job_name: 'redis'
+    kubernetes_sd_configs:
+      - role: pod
+        namespaces:
+          names:
+            - cyber-risk-engine
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_label_app]
+        action: keep
+        regex: redis
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_port]
+        action: replace
+        target_label: __address__
+        regex: (.+)
+        replacement: ${1}:9121
+
+  # Kafka metrics (via jmx_exporter)
+  - job_name: 'kafka'
+    kubernetes_sd_configs:
+      - role: pod
+        namespaces:
+          names:
+            - cyber-risk-engine
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_label_app]
+        action: keep
+        regex: kafka
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_port]
+        action: replace
+        target_label: __address__
+        regex: (.+)
+        replacement: ${1}:7071
+
+  # OpenSearch metrics
+  - job_name: 'opensearch'
+    kubernetes_sd_configs:
+      - role: pod
+        namespaces:
+          names:
+            - cyber-risk-engine
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_label_app]
+        action: keep
+        regex: opensearch
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_port]
+        action: replace
+        target_label: __address__
+        regex: (.+)
+        replacement: ${1}:9600
+
+  # Node metrics (via node_exporter)
+  - job_name: 'node'
+    kubernetes_sd_configs:
+      - role: node
+    relabel_configs:
+      - action: labelmap
+        regex: __meta_kubernetes_node_label_(.+)
+
+  # Kubernetes metrics (kube-state-metrics)
+  - job_name: 'kubernetes-pods'
+    kubernetes_sd_configs:
+      - role: pod
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_label_app]
+        action: keep
+        regex: 'kube-state-metrics'
+
+  # Cadvisor for container metrics
+  - job_name: 'cadvisor'
+    kubernetes_sd_configs:
+      - role: node
+    scheme: https
+    tls_config:
+      ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+    bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+    relabel_configs:
+      - action: labelmap
+        regex: __meta_kubernetes_node_label_(.+)
+      - target_label: __address__
+        replacement: kubernetes.default.svc:443
+      - source_labels: [__meta_kubernetes_node_name]
+        regex: (.+)
+        target_label: __metrics_path__
+        replacement: /api/v1/nodes/${1}/proxy/metrics/cadvisor
+
+# Remote write (if using remote storage like Thanos, Cortex, or Mimir)
+# remote_write:
+#   - url: "https://prometheus-remote-write.example.com/api/v1/write"
+#     headers:
+#       Authorization: "Bearer ${PROMETHEUS_REMOTE_WRITE_TOKEN}"

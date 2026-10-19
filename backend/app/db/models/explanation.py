@@ -4,20 +4,23 @@ Maps decoupled narrative explanations, evidence citations, primary component dri
 guardrail validation checks, and foreign key relationships to RiskAssessmentModel.
 """
 
-from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
     Boolean,
     DateTime,
-    Enum as SAEnum,
     ForeignKey,
     Index,
     String,
     Text,
 )
-from sqlalchemy.dialects.postgresql import JSONB, UUID as PGUUID
+from sqlalchemy import (
+    Enum as SAEnum,
+)
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -68,14 +71,14 @@ class RiskExplanationModel(Base):
     )
 
     # Key explanatory points stored as an array of strings
-    key_factors: Mapped[List[str]] = mapped_column(
+    key_factors: Mapped[list[str]] = mapped_column(
         JSONB,
         nullable=False,
         default=list,
     )
 
     # Telemetry citations verifying grounding [ {claim, source_field, observed_value} ]
-    evidence_citations: Mapped[List[Dict[str, Any]]] = mapped_column(
+    evidence_citations: Mapped[list[dict[str, Any]]] = mapped_column(
         JSONB,
         nullable=False,
         default=list,
@@ -93,7 +96,7 @@ class RiskExplanationModel(Base):
         index=True,
     )
 
-    model_identifier: Mapped[Optional[str]] = mapped_column(
+    model_identifier: Mapped[str | None] = mapped_column(
         String(128),
         nullable=True,
     )
@@ -105,14 +108,14 @@ class RiskExplanationModel(Base):
         default=True,
     )
 
-    guardrail_validation_details: Mapped[Dict[str, Any]] = mapped_column(
+    guardrail_validation_details: Mapped[dict[str, Any]] = mapped_column(
         JSONB,
         nullable=False,
         default=dict,
     )
 
     # LLM execution latency, token counts, and completion statistics
-    execution_metadata: Mapped[Dict[str, Any]] = mapped_column(
+    execution_metadata: Mapped[dict[str, Any]] = mapped_column(
         JSONB,
         nullable=False,
         default=dict,
@@ -121,15 +124,15 @@ class RiskExplanationModel(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
-        default=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
         index=True,
     )
 
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
     )
 
     # Relationships

@@ -4,8 +4,8 @@ Enforces an immutable, append-only record of administrative overrides,
 policy transitions, and risk score adjustments.
 """
 
-from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any, Dict, Optional
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
@@ -15,7 +15,8 @@ from sqlalchemy import (
     String,
     text,
 )
-from sqlalchemy.dialects.postgresql import JSONB, UUID as PGUUID
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -73,14 +74,14 @@ class AuditLogModel(Base):
     )
 
     # State snapshots
-    before_snapshot: Mapped[Dict[str, Any]] = mapped_column(
+    before_snapshot: Mapped[dict[str, Any]] = mapped_column(
         JSONB,
         nullable=False,
         default=dict,
         server_default=text("'{}'::jsonb"),
     )
 
-    after_snapshot: Mapped[Dict[str, Any]] = mapped_column(
+    after_snapshot: Mapped[dict[str, Any]] = mapped_column(
         JSONB,
         nullable=False,
         default=dict,
@@ -88,7 +89,7 @@ class AuditLogModel(Base):
     )
 
     # Additional contextual metadata / override details
-    details: Mapped[Dict[str, Any]] = mapped_column(
+    details: Mapped[dict[str, Any]] = mapped_column(
         JSONB,
         nullable=False,
         default=dict,
@@ -99,7 +100,7 @@ class AuditLogModel(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
-        default=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
         index=True,
     )
 

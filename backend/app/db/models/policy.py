@@ -4,9 +4,9 @@ Provides PostgreSQL table mapping, strict Decimal weight constraints (sum to 1.0
 versioning, continuous threshold serialization in JSONB, and assessment relationships.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
@@ -18,7 +18,8 @@ from sqlalchemy import (
     String,
     Text,
 )
-from sqlalchemy.dialects.postgresql import JSONB, UUID as PGUUID
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -56,7 +57,7 @@ class PolicyModel(Base):
         index=True,
     )
 
-    description: Mapped[Optional[str]] = mapped_column(
+    description: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
@@ -90,26 +91,26 @@ class PolicyModel(Base):
     )
 
     # Dynamic JSONB storage for category threshold intervals
-    thresholds_config: Mapped[Dict[str, Any]] = mapped_column(
+    thresholds_config: Mapped[dict[str, Any]] = mapped_column(
         JSONB,
         nullable=False,
     )
 
     # Dynamic overrides for specific asset endpoint classes (e.g. {"DOMAIN_CONTROLLER": 95.0})
-    endpoint_class_weights: Mapped[Dict[str, Any]] = mapped_column(
+    endpoint_class_weights: Mapped[dict[str, Any]] = mapped_column(
         JSONB,
         nullable=False,
         default=dict,
     )
 
     # Governance & regulatory audit metadata
-    metadata_info: Mapped[Dict[str, Any]] = mapped_column(
+    metadata_info: Mapped[dict[str, Any]] = mapped_column(
         JSONB,
         nullable=False,
         default=dict,
     )
 
-    created_by: Mapped[Optional[str]] = mapped_column(
+    created_by: Mapped[str | None] = mapped_column(
         String(100),
         nullable=True,
     )
@@ -117,19 +118,19 @@ class PolicyModel(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
-        default=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
         index=True,
     )
 
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
     )
 
     # Relationships
-    risk_assessments: Mapped[List["RiskAssessmentModel"]] = relationship(
+    risk_assessments: Mapped[list["RiskAssessmentModel"]] = relationship(
         "RiskAssessmentModel",
         back_populates="policy",
         lazy="selectin",

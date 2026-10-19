@@ -1,0 +1,297 @@
+# Prometheus Alerting Rules for Cyber Risk Orchestration Engine
+# These rules monitor the health and performance of the risk assessment system
+
+groups:
+  - name: risk-engine-critical
+    interval: 30s
+    rules:
+      # Service availability
+      - alert: RiskEngineDown
+        expr: up{job="risk-engine"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: security-engineering
+        annotations:
+          summary: "Risk Engine instance {{ $labels.instance }} is down"
+          description: "The risk assessment engine has been down for more than 1 minute."
+          runbook_url: "https://wiki.example.com/runbooks/risk-engine-down"
+
+      # Readiness probe failures
+      - alert: RiskEngineNotReady
+        expr: |
+          sum(rate(http_requests_total{job="risk-engine",handler="/health/ready",code=~"5.."}[5m])) 
+          / sum(rate(http_requests_total{job="risk-engine",handler="/health/ready"}[5m])) > 0.1
+        for: 2m
+        labels:
+          severity: critical
+          team: security-engineering
+        annotations:
+          summary: "Risk Engine readiness failures > 10%"
+          description: "More than 10% of readiness probes are failing on {{ $labels.instance }}."
+          runbook_url: "https://wiki.example.com/runbooks/risk-engine-not-ready"
+
+      # Database connectivity
+      - alert: RiskEngineDatabaseDown
+        expr: pg_up == 0
+        for: 30s
+        labels:
+          severity: critical
+          team: database-admins
+        annotations:
+          summary: "PostgreSQL connection failed for Risk Engine"
+          description: "The risk engine cannot connect to PostgreSQL database."
+
+      # Redis connectivity
+      - alert: RiskEngineRedisDown
+        expr: redis_up == 0
+        for: 30s
+        labels:
+          severity: critical
+          team: platform-engineering
+        annotations:
+          summary: "Redis connection failed for Risk Engine"
+          description: "The risk engine cannot connect to Redis cache."
+
+      # OpenSearch connectivity
+      - alert: RiskEngineOpenSearchDown
+        expr: opensearch_up == 0
+        for: 30s
+        labels:
+          severity: critical
+          team: platform-engineering
+        annotations:
+          summary: "OpenSearch connection failed for Risk Engine"
+          description: "The risk engine cannot connect to OpenSearch for logging/telemetry."
+
+  - name: risk-engine-performance
+    interval: 60s
+    rules:
+      # High latency on scoring endpoint
+      - alert: RiskEngineHighScoringLatency
+        expr: |
+          histogram_quantile(0.95, 
+            sum(rate(http_request_duration_seconds_bucket{job="risk-engine",handler=~"/v1/risk-assessments*"}[5m])) by (le)
+          ) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          team: security-engineering
+        annotations:
+          summary: "Risk scoring p95 latency > 500ms"
+          description: "The p95 latency for risk assessment scoring has exceeded 500ms on {{ $labels.instance }}."
+          runbook_url: "https://wiki.example.com/runbooks/high-scoring-latency"
+
+      # High latency on explanation endpoint
+      - alert: RiskEngineHighExplanationLatency
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(http_request_duration_seconds_bucket{job="risk-engine",handler=~"/v1/explanations*"}[5m])) by (le)
+          ) > 5
+        for: 5m
+        labels:
+          severity: warning
+          team: security-engineering
+        annotations:
+          summary: "Explanation generation p95 latency > 5s"
+          description: "The p95 latency for LLM explanation generation has exceeded 5 seconds."
+
+      # High error rate
+      - alert: RiskEngineHighErrorRate
+        expr: |
+          sum(rate(http_requests_total{job="risk-engine",code=~"5.."}[5m]))
+          / sum(rate(http_requests_total{job="risk-engine"}[5m])) > 0.05
+        for: 3m
+        labels:
+          severity: warning
+          team: security-engineering
+        annotations:
+          summary: "Risk Engine HTTP 5xx error rate > 5%"
+          description: "More than 5% of requests are returning 5xx errors."
+
+      # Slow database queries
+      - alert: RiskEngineSlowDatabaseQueries
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(pg_query_duration_seconds_bucket[5m])) by (le)
+          ) > 1
+        for: 5m
+        labels:
+          severity: warning
+          team: database-admins
+        annotations:
+          summary: "PostgreSQL p95 query latency > 1s"
+          description: "Database queries are taking longer than 1 second at p95."
+
+  - name: risk-engine-business
+    interval: 60s
+    rules:
+      # Guardrail violations (critical - scoring integrity)
+      - alert: RiskEngineGuardrailViolations
+        expr: increase(guardrail_violations_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          team: security-engineering
+        annotations:
+          summary: "LLM Guardrail violation detected!"
+          description: "An LLM explanation violated guardrails and was rejected. This indicates potential scoring manipulation attempt or LLM hallucination."
+          runbook_url: "https://wiki.example.com/runbooks/guardrail-violation"
+
+      # Fallback to deterministic template rate
+      - alert: RiskEngineHighFallbackRate
+        expr: |
+          increase(explanation_fallback_total[15m])
+          / increase(explanation_requests_total[15m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          team: security-engineering
+        annotations:
+          summary: "LLM fallback rate > 5%"
+          description: "More than 5% of explanation requests are falling back to deterministic template. LLM may be unavailable or guardrails failing frequently."
+
+      # Fallback to PostgreSQL rate (Redis unavailable)
+      - alert: RiskEngineHighPostgresFallbackRate
+        expr: |
+          increase(redis_fallback_total[15m])
+          / increase(risk_assessments_total[15m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          team: platform-engineering
+        annotations:
+          summary: "Redis fallback rate > 5%"
+          description: "More than 5% of risk assessments are falling back to PostgreSQL for frequency enrichment. Redis may be unavailable."
+
+      # Low assessment throughput
+      - alert: RiskEngineLowThroughput
+        expr: |
+          rate(risk_assessments_total[15m]) < 1
+        for: 10m
+        labels:
+          severity: info
+          team: security-engineering
+        annotations:
+          summary: "Risk assessment throughput below 1 req/s"
+          description: "The risk assessment engine is processing fewer than 1 request per second. May indicate upstream issues or low traffic."
+
+      # Policy cache miss rate
+      - alert: RiskEngineHighPolicyCacheMissRate
+        expr: |
+          rate(policy_cache_misses_total[5m])
+          / rate(policy_cache_requests_total[5m]) > 0.2
+        for: 5m
+        labels:
+          severity: info
+          team: security-engineering
+        annotations:
+          summary: "Policy cache miss rate > 20%"
+          description: "The active policy cache is missing more than 20% of requests. Cache TTL may be too short or cache invalidation too frequent."
+
+  - name: risk-engine-resources
+    interval: 60s
+    rules:
+      # High memory usage
+      - alert: RiskEngineHighMemoryUsage
+        expr: |
+          (container_memory_usage_bytes{pod=~"risk-engine-backend.*"} 
+           / container_spec_memory_limit_bytes{pod=~"risk-engine-backend.*"}) > 0.85
+        for: 5m
+        labels:
+          severity: warning
+          team: platform-engineering
+        annotations:
+          summary: "Risk Engine memory usage > 85%"
+          description: "The risk engine container is using more than 85% of its memory limit."
+
+      # High CPU usage
+      - alert: RiskEngineHighCPUUsage
+        expr: |
+          (rate(container_cpu_usage_seconds_total{pod=~"risk-engine-backend.*"}[5m])
+           / container_spec_cpu_quota{pod=~"risk-engine-backend.*"} / container_spec_cpu_period{pod=~"risk-engine-backend.*"}) > 0.85
+        for: 5m
+        labels:
+          severity: warning
+          team: platform-engineering
+        annotations:
+          summary: "Risk Engine CPU usage > 85%"
+          description: "The risk engine container is using more than 85% of its CPU limit."
+
+      # Pod restarts
+      - alert: RiskEngineFrequentRestarts
+        expr: |
+          increase(kube_pod_container_status_restarts_total{pod=~"risk-engine-backend.*",namespace="cyber-risk-engine"}[1h]) > 3
+        for: 0m
+        labels:
+          severity: warning
+          team: platform-engineering
+        annotations:
+          summary: "Risk Engine pod restarting frequently"
+          description: "The risk engine pod has restarted more than 3 times in the last hour."
+
+  - name: risk-engine-telemetry
+    interval: 60s
+    rules:
+      # OpenTelemetry collector health
+      - alert: OTELCollectorDown
+        expr: up{job="otel-collector"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: platform-engineering
+        annotations:
+          summary: "OpenTelemetry Collector is down"
+          description: "The OTEL collector is not accepting traces/metrics/logs."
+
+      # Trace sampling rate too low
+      - alert: OTELLowTraceSampling
+        expr: |
+          rate(otelcol_receiver_accepted_spans_total[5m])
+          / rate(otelcol_receiver_received_spans_total[5m]) < 0.01
+        for: 10m
+        labels:
+          severity: warning
+          team: platform-engineering
+        annotations:
+          summary: "OTEL trace sampling rate < 1%"
+          description: "The trace sampling rate has dropped below 1%. May indicate sampling configuration issues."
+
+      # Metric export failures
+      - alert: OTELMetricExportFailures
+        expr: |
+          rate(otelcol_exporter_send_failed_metric_points_total[5m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+          team: platform-engineering
+        annotations:
+          summary: "OTEL metric export failures"
+          description: "The OTEL collector is failing to export metrics to backends."
+
+  - name: risk-engine-kafka
+    interval: 60s
+    rules:
+      # Kafka consumer lag
+      - alert: KafkaConsumerLagHigh
+        expr: |
+          kafka_consumer_group_lag{topic="detections",group="detection-consumer-group"} > 10000
+        for: 5m
+        labels:
+          severity: warning
+          team: platform-engineering
+        annotations:
+          summary: "Kafka consumer lag > 10000"
+          description: "The detection consumer is falling behind. Processing may be too slow or consumer is down."
+
+      # Kafka producer errors
+      - alert: KafkaProducerErrors
+        expr: |
+          rate(kafka_producer_record_send_errors_total[5m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+          team: platform-engineering
+        annotations:
+          summary: "Kafka producer errors"
+          description: "The Kafka producer is encountering errors sending messages."

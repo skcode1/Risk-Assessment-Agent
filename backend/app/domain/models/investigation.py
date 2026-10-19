@@ -5,9 +5,9 @@ correlated endpoints, and historical incident tracking consumed by the scoring k
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from decimal import Decimal, ROUND_HALF_UP
-from typing import Any, Dict, List, Optional
+from datetime import UTC, datetime
+from decimal import ROUND_HALF_UP, Decimal
+from typing import Any
 from uuid import UUID, uuid4
 
 from app.domain.models.enums import EndpointClass
@@ -21,14 +21,14 @@ class TouchedEndpoint:
     """
     endpoint_id: str
     endpoint_class: EndpointClass = EndpointClass.UNKNOWN
-    ip_address: Optional[str] = None
+    ip_address: str | None = None
     is_compromised: bool = False
 
     def __post_init__(self) -> None:
         if not self.endpoint_id or not self.endpoint_id.strip():
             raise ValueError("Endpoint ID cannot be empty or whitespace.")
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "endpoint_id": self.endpoint_id,
             "endpoint_class": self.endpoint_class.value,
@@ -47,7 +47,7 @@ class InvestigationTelemetry:
     endpoints_touched: int
     endpoint_class: EndpointClass
     historical_incident_count: int
-    severity_hint: Optional[Decimal] = None
+    severity_hint: Decimal | None = None
 
     def __post_init__(self) -> None:
         if self.event_frequency < 0:
@@ -69,7 +69,7 @@ class InvestigationTelemetry:
             if not (Decimal("0.0") <= q_sev <= Decimal("100.0")):
                 raise ValueError(f"severity_hint must be bounded between [0.0, 100.0], got {q_sev}")
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "event_frequency": self.event_frequency,
             "endpoints_touched": self.endpoints_touched,
@@ -89,20 +89,20 @@ class InvestigationResult:
     correlation_id: UUID
     telemetry: InvestigationTelemetry
     investigation_id: UUID = field(default_factory=uuid4)
-    touched_endpoints: List[TouchedEndpoint] = field(default_factory=list)
-    mitre_attack_techniques: List[str] = field(default_factory=list)
-    evidence_summary: Dict[str, Any] = field(default_factory=dict)
-    investigated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    touched_endpoints: list[TouchedEndpoint] = field(default_factory=list)
+    mitre_attack_techniques: list[str] = field(default_factory=list)
+    evidence_summary: dict[str, Any] = field(default_factory=dict)
+    investigated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def __post_init__(self) -> None:
         """Validate UTC timezone bounds for all timestamps."""
         for ts_field in ("investigated_at", "created_at"):
             ts_val: datetime = getattr(self, ts_field)
             if ts_val.tzinfo is None:
-                object.__setattr__(self, ts_field, ts_val.replace(tzinfo=timezone.utc))
+                object.__setattr__(self, ts_field, ts_val.replace(tzinfo=UTC))
             else:
-                object.__setattr__(self, ts_field, ts_val.astimezone(timezone.utc))
+                object.__setattr__(self, ts_field, ts_val.astimezone(UTC))
 
     @property
     def event_frequency(self) -> int:
@@ -125,7 +125,7 @@ class InvestigationResult:
         return self.telemetry.historical_incident_count
 
     @property
-    def severity_hint(self) -> Optional[Decimal]:
+    def severity_hint(self) -> Decimal | None:
         """Accessor for optional pre-computed investigation severity hint."""
         return self.telemetry.severity_hint
 
@@ -145,7 +145,7 @@ class InvestigationResult:
         )
         return sorted_endpoints[0].endpoint_class
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Serializes investigation results into a clean dictionary contract."""
         return {
             "investigation_id": str(self.investigation_id),

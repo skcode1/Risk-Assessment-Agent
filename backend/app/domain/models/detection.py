@@ -5,9 +5,9 @@ prior to normalization, correlation, and deterministic scoring.
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from decimal import Decimal, ROUND_HALF_UP
-from typing import Any, Dict, Optional
+from datetime import UTC, datetime
+from decimal import ROUND_HALF_UP, Decimal
+from typing import Any
 from uuid import UUID, uuid4
 
 from app.domain.models.enums import DetectionSeverity, DetectionSourceType
@@ -20,8 +20,8 @@ class DetectionMetrics:
     Supplies telemetry to the Behavior sub-score calculator.
     """
     confidence: Decimal
-    fidelity: Optional[Decimal] = None
-    rule_accuracy_hint: Optional[Decimal] = None
+    fidelity: Decimal | None = None
+    rule_accuracy_hint: Decimal | None = None
 
     def __post_init__(self) -> None:
         """Enforce Decimal precision and bounded numeric ranges."""
@@ -70,12 +70,12 @@ class DetectionContext:
     """
     rule_id: str
     rule_name: str
-    technique_id: Optional[str] = None
-    source_ip: Optional[str] = None
-    destination_ip: Optional[str] = None
-    hostname: Optional[str] = None
-    username: Optional[str] = None
-    raw_payload: Dict[str, Any] = field(default_factory=dict)
+    technique_id: str | None = None
+    source_ip: str | None = None
+    destination_ip: str | None = None
+    hostname: str | None = None
+    username: str | None = None
+    raw_payload: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if not self.rule_id or not self.rule_id.strip():
@@ -96,17 +96,17 @@ class DetectionEvent:
     context: DetectionContext
     event_id: UUID = field(default_factory=uuid4)
     correlation_id: UUID = field(default_factory=uuid4)
-    detected_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    ingested_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    detected_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    ingested_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def __post_init__(self) -> None:
         """Validate UTC timezone bounds for all timestamp fields."""
         for ts_field in ("detected_at", "ingested_at"):
             ts_val: datetime = getattr(self, ts_field)
             if ts_val.tzinfo is None:
-                object.__setattr__(self, ts_field, ts_val.replace(tzinfo=timezone.utc))
+                object.__setattr__(self, ts_field, ts_val.replace(tzinfo=UTC))
             else:
-                object.__setattr__(self, ts_field, ts_val.astimezone(timezone.utc))
+                object.__setattr__(self, ts_field, ts_val.astimezone(UTC))
 
     @property
     def confidence(self) -> Decimal:
@@ -114,7 +114,7 @@ class DetectionEvent:
         return self.metrics.confidence
 
     @property
-    def source_ip(self) -> Optional[str]:
+    def source_ip(self) -> str | None:
         """Direct accessor for event source IP address."""
         return self.context.source_ip
 
@@ -123,7 +123,7 @@ class DetectionEvent:
         """Direct accessor for detection rule identifier."""
         return self.context.rule_id
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Serializes the detection event to a JSON-compatible dictionary."""
         return {
             "event_id": str(self.event_id),

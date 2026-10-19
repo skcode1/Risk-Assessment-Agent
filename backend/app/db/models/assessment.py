@@ -4,22 +4,25 @@ Provides PostgreSQL table mapping, strict Decimal precision columns,
 foreign key relationships, audit triggers, and JSONB snapshot storage.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any, Dict, Optional
+from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
     CheckConstraint,
     DateTime,
-    Enum as SAEnum,
     ForeignKey,
     Index,
     Numeric,
     String,
     Text,
 )
-from sqlalchemy.dialects.postgresql import JSONB, UUID as PGUUID
+from sqlalchemy import (
+    Enum as SAEnum,
+)
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -112,23 +115,23 @@ class RiskAssessmentModel(Base):
     )
 
     # Immutable raw snapshot dictionaries for forensic reproducibility
-    components_snapshot: Mapped[Dict[str, Any]] = mapped_column(
+    components_snapshot: Mapped[dict[str, Any]] = mapped_column(
         JSONB,
         nullable=False,
     )
 
-    applied_policy_snapshot: Mapped[Dict[str, Any]] = mapped_column(
+    applied_policy_snapshot: Mapped[dict[str, Any]] = mapped_column(
         JSONB,
         nullable=False,
     )
 
     # Analyst override metadata (if modified post-assessment)
-    override_score: Mapped[Optional[Decimal]] = mapped_column(
+    override_score: Mapped[Decimal | None] = mapped_column(
         Numeric(precision=5, scale=1, asdecimal=True),
         nullable=True,
     )
 
-    override_rating: Mapped[Optional[RiskCategory]] = mapped_column(
+    override_rating: Mapped[RiskCategory | None] = mapped_column(
         SAEnum(
             RiskCategory,
             name="risk_category_enum",
@@ -138,17 +141,17 @@ class RiskAssessmentModel(Base):
         nullable=True,
     )
 
-    override_justification: Mapped[Optional[str]] = mapped_column(
+    override_justification: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
 
-    overridden_by: Mapped[Optional[str]] = mapped_column(
+    overridden_by: Mapped[str | None] = mapped_column(
         String(100),
         nullable=True,
     )
 
-    overridden_at: Mapped[Optional[datetime]] = mapped_column(
+    overridden_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
@@ -157,15 +160,15 @@ class RiskAssessmentModel(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
-        default=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
         index=True,
     )
 
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
     )
 
     # Relationships

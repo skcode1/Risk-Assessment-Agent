@@ -5,21 +5,22 @@ and sliding-window counter updates, and GET /api/v1/detections/{event_id}
 for event context lookups with strict RBAC scopes and OpenTelemetry tracing.
 """
 
-from typing import Annotated, List, Optional
+from typing import Annotated
 from uuid import UUID, uuid4
 
+import asyncio
+
 from fastapi import APIRouter, Depends, Query, status
-import redis.asyncio as aioredis
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db_session
 from app.core.exceptions import BaseAppException
-from app.core.redis import get_redis_client
+from app.core.kafka import publish_detection_event
 from app.core.security import TokenClaims, require_scopes
 from app.core.telemetry import get_tracer
 from app.db.models.detection import DetectionModel
-from app.domain.models.enums import DetectionSeverity, DetectionSourceType
+from app.domain.models.enums import DetectionSeverity
 from app.schemas.detection import (
     DetectionCreateRequest,
     DetectionDetailResponse,
@@ -49,18 +50,19 @@ class DetectionNotFoundException(BaseAppException):
     summary="Ingest Security Detection Event",
     description=(
         "Ingests a raw detection signal, persists normalized detection context, "
-        "and atomically updates Redis sliding-window event frequency counters."
+        "and publishes it to the 'detections' Kafka topic so the detection "
+        "consumer can atomically update Redis sliding-window frequency counters."
     ),
 )
 async def ingest_detection_event(
     request: DetectionCreateRequest,
     db: Annotated[AsyncSession, Depends(get_db_session)],
-    redis: Annotated[aioredis.Redis, Depends(get_redis_client)],
     claims: Annotated[TokenClaims, Depends(require_scopes("detections:write"))],
 ) -> DetectionResponse:
     """
     Ingests and validates raw detection signals, maps normalized metadata,
-    and increments Redis temporal counters for downstream sliding-window calculations.
+    and publishes the event to Kafka for asynchronous sliding-window counter
+    updates performed by the detection consumer worker.
     """
     with tracer.start_as_current_span("api.v1.endpoints.ingest_detection_event") as span:
         span.set_attribute("actor_sub", claims.sub)
@@ -89,19 +91,19 @@ async def ingest_detection_event(
         db.add(detection_record)
         await db.flush()
 
-        # Update real-time sliding-window occurrence tracker in Redis
-        try:
-            window_seconds = 3600
-            counter_key = f"counter:{request.context.source_ip}:events"
-            now_ts = detection_record.detected_at.timestamp()
-
-            async with redis.pipeline(transaction=True) as pipe:
-                pipe.zremrangebyscore(counter_key, "-inf", now_ts - window_seconds)
-                pipe.zadd(counter_key, {str(event_id): now_ts})
-                pipe.expire(counter_key, window_seconds * 2)
-                await pipe.execute()
-        except Exception as redis_err:
-            span.record_exception(redis_err)
+        # Publish to Kafka so the detection consumer
+        # (app/workers/detection_consumer.py) can update Redis sliding-window
+        # counters (ZREMRANGEBYSCORE + ZADD + EXPIRE pipeline, offsets committed
+        # only after Redis success). Publishing runs in a worker thread to keep
+        # the event loop responsive and is non-fatal: the detection is already
+        # persisted, so a Kafka outage degrades counters without losing events.
+        kafka_payload = {
+            "event_id": str(event_id),
+            "correlation_id": str(request.correlation_id),
+            "source_ip": request.context.source_ip,
+            "detected_at": detection_record.detected_at.timestamp(),
+        }
+        await asyncio.to_thread(publish_detection_event, kafka_payload)
 
         return DetectionResponse.model_validate(detection_record)
 
@@ -135,7 +137,7 @@ async def get_detection_by_id(
 
 @router.get(
     "",
-    response_model=List[DetectionResponse],
+    response_model=list[DetectionResponse],
     status_code=status.HTTP_200_OK,
     summary="List Detection Events",
     description="Queries detection events filtered dynamically by source IP, correlation ID, or severity.",
@@ -143,12 +145,12 @@ async def get_detection_by_id(
 async def list_detections(
     db: Annotated[AsyncSession, Depends(get_db_session)],
     claims: Annotated[TokenClaims, Depends(require_scopes("detections:read"))],
-    source_ip: Optional[str] = Query(default=None, description="Filter by source IP address"),
-    correlation_id: Optional[UUID] = Query(default=None, description="Filter by correlation ID"),
-    severity: Optional[DetectionSeverity] = Query(default=None, description="Filter by detection severity"),
+    source_ip: str | None = Query(default=None, description="Filter by source IP address"),
+    correlation_id: UUID | None = Query(default=None, description="Filter by correlation ID"),
+    severity: DetectionSeverity | None = Query(default=None, description="Filter by detection severity"),
     limit: int = Query(default=50, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
-) -> List[DetectionResponse]:
+) -> list[DetectionResponse]:
     """Queries paginated detection records based on dynamic search filters."""
     with tracer.start_as_current_span("api.v1.endpoints.list_detections") as span:
         span.set_attribute("actor_sub", claims.sub)

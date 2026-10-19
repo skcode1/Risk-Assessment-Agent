@@ -4,10 +4,11 @@ Defines dynamic versioning, fully configurable component weights,
 arbitrary continuous category thresholds, and runtime category resolution.
 """
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
-from typing import Any, Dict, List, Mapping, Optional, Tuple
+from datetime import UTC, datetime
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
+from typing import Any
 from uuid import UUID, uuid4
 
 from app.domain.models.enums import EndpointClass, RiskCategory
@@ -51,7 +52,7 @@ class PolicyWeights:
                 f"sensitivity={self.sensitivity}, history={self.history})"
             )
 
-    def to_dict(self) -> Dict[str, float]:
+    def to_dict(self) -> dict[str, float]:
         return {
             "behavior": float(self.behavior),
             "frequency": float(self.frequency),
@@ -59,7 +60,7 @@ class PolicyWeights:
             "history": float(self.history),
         }
 
-    def to_decimal_dict(self) -> Dict[str, Decimal]:
+    def to_decimal_dict(self) -> dict[str, Decimal]:
         return {
             "behavior": self.behavior,
             "frequency": self.frequency,
@@ -121,7 +122,7 @@ class CategoryThresholdRange:
         q_score = score.quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
         return self.min_score <= q_score <= self.max_score
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "category": self.category.value,
             "min_score": float(self.min_score),
@@ -135,7 +136,7 @@ class ThresholdConfig:
     Dynamic container for all risk category boundaries.
     Validates range continuity, checks for gaps and overlaps, and enforces global coverage across [0.0, 100.0].
     """
-    tiers: Tuple[CategoryThresholdRange, ...]
+    tiers: tuple[CategoryThresholdRange, ...]
 
     def __post_init__(self) -> None:
         if not self.tiers:
@@ -199,7 +200,7 @@ class ThresholdConfig:
 
         raise ValueError(f"Score {q_score} could not be resolved against configured thresholds.")
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {tier.category.value.lower(): tier.to_dict() for tier in self.tiers}
 
     @classmethod
@@ -210,7 +211,7 @@ class ThresholdConfig:
         { "low": {"min": 0.0, "max": 39.9}, ... } or
         { "LOW": [0.0, 39.9], ... }
         """
-        parsed_ranges: List[CategoryThresholdRange] = []
+        parsed_ranges: list[CategoryThresholdRange] = []
 
         for cat_key, bounds in data.items():
             category_enum = RiskCategory(cat_key.upper())
@@ -244,12 +245,12 @@ class RiskPolicy:
     weights: PolicyWeights
     thresholds: ThresholdConfig
     policy_id: UUID = field(default_factory=uuid4)
-    description: Optional[str] = None
+    description: str | None = None
     is_active: bool = True
-    endpoint_class_weights: Dict[EndpointClass, Decimal] = field(default_factory=dict)
-    metadata: Dict[str, Any] = field(default_factory=dict)
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    endpoint_class_weights: dict[EndpointClass, Decimal] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def __post_init__(self) -> None:
         if not self.name or not self.name.strip():
@@ -261,13 +262,13 @@ class RiskPolicy:
         for ts_field in ("created_at", "updated_at"):
             ts_val: datetime = getattr(self, ts_field)
             if ts_val.tzinfo is None:
-                object.__setattr__(self, ts_field, ts_val.replace(tzinfo=timezone.utc))
+                object.__setattr__(self, ts_field, ts_val.replace(tzinfo=UTC))
             else:
-                object.__setattr__(self, ts_field, ts_val.astimezone(timezone.utc))
+                object.__setattr__(self, ts_field, ts_val.astimezone(UTC))
 
         # Quantize and validate custom endpoint class weights if provided
         if self.endpoint_class_weights:
-            validated_weights: Dict[EndpointClass, Decimal] = {}
+            validated_weights: dict[EndpointClass, Decimal] = {}
             for ep_class, raw_wt in self.endpoint_class_weights.items():
                 if not isinstance(raw_wt, Decimal):
                     raw_wt = Decimal(str(raw_wt))
@@ -294,7 +295,7 @@ class RiskPolicy:
             Decimal("0.1"), rounding=ROUND_HALF_UP
         )
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Serializes the complete risk policy state to a clean JSON-compatible dictionary."""
         return {
             "policy_id": str(self.policy_id),
@@ -322,6 +323,11 @@ class RiskPolicy:
           - MEDIUM:  40.0  to 64.9
           - HIGH:    65.0  to 84.9
           - CRITICAL: 85.0 to 100.0
+        Calculator Configs (moved to metadata for governance):
+          - frequency_config: saturation_count=50, curvature_constant=1.0
+          - history_config: incident_saturation_ceiling=5, scaling_curve="linear"
+          - sensitivity_config: apply_lateral_spread_boost=True, lateral_boost_per_endpoint=2.5, lateral_boost_cap=15.0, compromise_multiplier=1.10
+          - behavior_config: apply_severity_hint_blend=False
         """
         weights = PolicyWeights(
             behavior=Decimal("0.40"),
@@ -363,6 +369,32 @@ class RiskPolicy:
                 # Canonical 6.3 spec sensitivity for the reference database
                 # asset: S = 80.0 in the authoritative scoring example.
                 EndpointClass.DATABASE_SERVER: Decimal("80.0"),
+            },
+            metadata={
+                "frequency_config": {
+                    "saturation_count": 50,
+                    "curvature_constant": 1.0,
+                    "min_score": "0.0",
+                    "max_score": "100.0",
+                },
+                "history_config": {
+                    "incident_saturation_ceiling": 5,
+                    "scaling_curve": "linear",
+                    "min_score": "0.0",
+                    "max_score": "100.0",
+                    "exponential_rate": 0.5,
+                },
+                "sensitivity_config": {
+                    "apply_lateral_spread_boost": True,
+                    "lateral_boost_per_endpoint": "2.5",
+                    "lateral_boost_cap": "15.0",
+                    "compromise_multiplier": "1.10",
+                    "min_score": "0.0",
+                    "max_score": "100.0",
+                },
+                "behavior_config": {
+                    "apply_severity_hint_blend": False,
+                },
             },
             is_active=True,
         )

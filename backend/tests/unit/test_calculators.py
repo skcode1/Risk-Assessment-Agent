@@ -5,8 +5,8 @@ dynamic configurations, boundary ranges [0.0, 100.0], and specification targets.
 """
 
 from decimal import Decimal
-from typing import Optional
 from uuid import uuid4
+
 import pytest
 
 from app.domain.engine.calculators.behavior import (
@@ -47,7 +47,7 @@ from app.domain.models.policy import RiskPolicy
 def build_test_detection(
     confidence: Decimal,
     severity: DetectionSeverity = DetectionSeverity.HIGH,
-    fidelity: Optional[Decimal] = None,
+    fidelity: Decimal | None = None,
 ) -> DetectionEvent:
     """Helper to dynamically construct DetectionEvent instances for testing."""
     return DetectionEvent(
@@ -68,8 +68,8 @@ def build_test_investigation(
     endpoints_touched: int = 1,
     endpoint_class: EndpointClass = EndpointClass.WORKSTATION,
     historical_incident_count: int = 0,
-    severity_hint: Optional[Decimal] = None,
-    touched_endpoints: Optional[list[TouchedEndpoint]] = None,
+    severity_hint: Decimal | None = None,
+    touched_endpoints: list[TouchedEndpoint] | None = None,
 ) -> InvestigationResult:
     """Helper to dynamically construct InvestigationResult instances for testing."""
     return InvestigationResult(

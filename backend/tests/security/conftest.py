@@ -2,7 +2,6 @@
 
 import pytest
 
-
 # @pytest.fixture(scope="session")
 # def event_loop():
 #     """Force a single shared event loop for all tests in this module."""
@@ -10,13 +9,10 @@ import pytest
 #     asyncio.set_event_loop(loop)
 #     yield loop
 #     loop.close()
-
-
-
-
-import pytest
 from httpx import ASGITransport, AsyncClient
+
 from app.main import app
+
 
 @pytest.fixture
 def security_client():

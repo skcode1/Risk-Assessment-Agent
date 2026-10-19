@@ -5,9 +5,9 @@ Provides full support for investigation ingestion, audit detail, query parameter
 and risk kernel contracts.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Annotated, Any, Dict, List, Optional
+from typing import Annotated, Any
 from uuid import UUID, uuid4
 
 from pydantic import (
@@ -42,7 +42,7 @@ class TouchedEndpointDetail(BaseModel):
         Field(default=EndpointClass.UNKNOWN, description="Sensitivity classification of this asset."),
     ]
     ip_address: Annotated[
-        Optional[str],
+        str | None,
         Field(default=None, description="IP address observed on this asset during the event window."),
     ]
     is_compromised: Annotated[
@@ -98,7 +98,7 @@ class InvestigationTelemetryMetrics(BaseModel):
         ),
     ]
     severity_hint: Annotated[
-        Optional[float],
+        float | None,
         Field(
             default=None,
             ge=0.0,
@@ -124,14 +124,14 @@ class InvestigationResultBase(BaseModel):
         Field(..., description="Correlated counts, touched endpoints, and historical metrics."),
     ]
     touched_endpoints_detail: Annotated[
-        List[TouchedEndpointDetail],
+        list[TouchedEndpointDetail],
         Field(
             default_factory=list,
             description="Itemized list of all assets touched, supporting multi-endpoint sensitivity audits.",
         ),
     ]
     mitre_attack_techniques: Annotated[
-        List[str],
+        list[str],
         Field(
             default_factory=list,
             description="List of MITRE ATT&CK technique IDs correlated during investigation.",
@@ -139,7 +139,7 @@ class InvestigationResultBase(BaseModel):
         ),
     ]
     evidence_summary: Annotated[
-        Dict[str, Any],
+        dict[str, Any],
         Field(
             default_factory=dict,
             description="Structured investigation evidence key-value store.",
@@ -152,7 +152,7 @@ class InvestigationResultCreate(InvestigationResultBase):
     model_config = ConfigDict(extra="ignore", str_strip_whitespace=True)
 
     investigation_id: Annotated[
-        Optional[UUID],
+        UUID | None,
         Field(
             default=None,
             description="Client-supplied or worker-generated investigation ID. Generated if omitted.",
@@ -161,7 +161,7 @@ class InvestigationResultCreate(InvestigationResultBase):
     investigated_at: Annotated[
         datetime,
         Field(
-            default_factory=lambda: datetime.now(timezone.utc),
+            default_factory=lambda: datetime.now(UTC),
             description="UTC timestamp when the investigation analysis completed.",
         ),
     ]
@@ -170,8 +170,8 @@ class InvestigationResultCreate(InvestigationResultBase):
     @classmethod
     def ensure_utc(cls, v: datetime) -> datetime:
         if v.tzinfo is None:
-            return v.replace(tzinfo=timezone.utc)
-        return v.astimezone(timezone.utc)
+            return v.replace(tzinfo=UTC)
+        return v.astimezone(UTC)
 
 
 # Endpoint request alias expected by app.api.v1.endpoints.investigation
@@ -201,7 +201,7 @@ class InvestigationResult(InvestigationResultBase):
     created_at: Annotated[
         datetime,
         Field(
-            default_factory=lambda: datetime.now(timezone.utc),
+            default_factory=lambda: datetime.now(UTC),
             description="UTC timestamp when the investigation record was persisted.",
         ),
     ]
@@ -233,7 +233,7 @@ class InvestigationResult(InvestigationResultBase):
             mitre_attack_techniques=payload.mitre_attack_techniques,
             evidence_summary=payload.evidence_summary,
             investigated_at=payload.investigated_at,
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
         )
 
 
@@ -245,7 +245,7 @@ class InvestigationResponse(InvestigationResultBase):
     investigated_at: Annotated[datetime, Field(..., description="UTC completion timestamp.")]
     created_at: Annotated[
         datetime,
-        Field(default_factory=lambda: datetime.now(timezone.utc), description="Persistence timestamp."),
+        Field(default_factory=lambda: datetime.now(UTC), description="Persistence timestamp."),
     ]
 
 
@@ -258,11 +258,11 @@ class InvestigationDetailResponse(InvestigationResponse):
         Field(default="COMPLETED", description="Investigation status (e.g., PENDING, IN_PROGRESS, COMPLETED)."),
     ]
     analyst_notes: Annotated[
-        Optional[str],
+        str | None,
         Field(default=None, description="Optional reviewer commentary or triage context."),
     ]
     updated_at: Annotated[
-        Optional[datetime],
+        datetime | None,
         Field(default=None, description="Timestamp of the most recent update."),
     ]
 
@@ -272,7 +272,7 @@ class InvestigationListResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     items: Annotated[
-        List[InvestigationResponse],
+        list[InvestigationResponse],
         Field(..., description="Array of investigation summaries."),
     ]
     total: Annotated[int, Field(..., ge=0, description="Total matching records.")]
@@ -284,11 +284,11 @@ class InvestigationFilterParams(BaseModel):
     """Query parameter validation model for searching investigations."""
     model_config = ConfigDict(extra="forbid")
 
-    detection_event_id: Optional[UUID] = Field(default=None, description="Filter by detection event UUID.")
-    correlation_id: Optional[UUID] = Field(default=None, description="Filter by distributed correlation ID.")
-    endpoint_class: Optional[EndpointClass] = Field(default=None, description="Filter by asset tier.")
-    min_frequency: Optional[int] = Field(default=None, ge=0, description="Filter by minimum event frequency.")
-    start_time: Optional[datetime] = Field(default=None, description="Inclusive starting timestamp.")
-    end_time: Optional[datetime] = Field(default=None, description="Inclusive ending timestamp.")
+    detection_event_id: UUID | None = Field(default=None, description="Filter by detection event UUID.")
+    correlation_id: UUID | None = Field(default=None, description="Filter by distributed correlation ID.")
+    endpoint_class: EndpointClass | None = Field(default=None, description="Filter by asset tier.")
+    min_frequency: int | None = Field(default=None, ge=0, description="Filter by minimum event frequency.")
+    start_time: datetime | None = Field(default=None, description="Inclusive starting timestamp.")
+    end_time: datetime | None = Field(default=None, description="Inclusive ending timestamp.")
     limit: int = Field(default=50, ge=1, le=500, description="Page size limit.")
     offset: int = Field(default=0, ge=0, description="Page offset.")

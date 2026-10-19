@@ -5,10 +5,10 @@ and dynamic telemetry counter aggregations using an isolated Redis container.
 """
 
 import asyncio
-from datetime import datetime, timezone
 import time
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 from uuid import uuid4
+
 import pytest
 import pytest_asyncio
 import redis.asyncio as aioredis

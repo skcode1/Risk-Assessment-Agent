@@ -1,0 +1,35 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base/risk-engine.yaml
+
+namespace: cyber-risk-engine
+
+commonLabels:
+  environment: production
+
+images:
+  - name: ghcr.io/your-org/cyber-risk-engine-backend
+    newTag: latest
+
+patches:
+  - patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: risk-engine-backend
+        namespace: cyber-risk-engine
+      spec:
+        replicas: 5
+        template:
+          spec:
+            containers:
+              - name: backend
+                resources:
+                  requests:
+                    cpu: "1000m"
+                    memory: "1Gi"
+                  limits:
+                    cpu: "4000m"
+                    memory: "4Gi"

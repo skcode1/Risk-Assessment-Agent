@@ -4,13 +4,15 @@ Maps sliding-window recurrence count and event frequency to a bounded 0-100 scal
 via deterministic scaling strategies (logarithmic, linear-capped, or sigmoid).
 """
 
-from abc import ABC, abstractmethod
-from dataclasses import dataclass
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 import math
-from typing import Any, Mapping, Optional
+from abc import ABC, abstractmethod
+from collections.abc import Mapping
+from dataclasses import dataclass
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
+from typing import Any
 
 from app.domain.models.investigation import InvestigationResult
+from app.domain.models.policy import RiskPolicy
 
 
 class FrequencyMappingStrategy(ABC):
@@ -20,12 +22,11 @@ class FrequencyMappingStrategy(ABC):
     def calculate(
         self,
         investigation: InvestigationResult,
-        parameters: Optional[Mapping[str, Any]] = None,
+        parameters: Mapping[str, Any] | None = None,
     ) -> Decimal:
         """
         Calculates the normalized Frequency component score bounded within [0.0, 100.0].
         """
-        pass
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,8 +80,8 @@ class DynamicFrequencyCalculator(FrequencyMappingStrategy):
 
     def __init__(
         self,
-        default_log_config: Optional[LogarithmicCurveConfig] = None,
-        default_linear_config: Optional[LinearCappedCurveConfig] = None,
+        default_log_config: LogarithmicCurveConfig | None = None,
+        default_linear_config: LinearCappedCurveConfig | None = None,
     ) -> None:
         self._default_log_config = default_log_config or LogarithmicCurveConfig()
         self._default_linear_config = default_linear_config or LinearCappedCurveConfig()
@@ -88,7 +89,8 @@ class DynamicFrequencyCalculator(FrequencyMappingStrategy):
     def calculate(
         self,
         investigation: InvestigationResult,
-        parameters: Optional[Mapping[str, Any]] = None,
+        policy: RiskPolicy | None = None,
+        parameters: Mapping[str, Any] | None = None,
     ) -> Decimal:
         """
         Normalizes the investigation event frequency into a deterministic 0-100 score.
@@ -103,14 +105,15 @@ class DynamicFrequencyCalculator(FrequencyMappingStrategy):
             curve_type = str(parameters["curve_type"]).lower()
 
         if curve_type == "linear":
-            return self._calculate_linear(raw_frequency, parameters)
+            return self._calculate_linear(raw_frequency, policy, parameters)
 
-        return self._calculate_logarithmic(raw_frequency, parameters)
+        return self._calculate_logarithmic(raw_frequency, policy, parameters)
 
     def _calculate_logarithmic(
         self,
         frequency: int,
-        parameters: Optional[Mapping[str, Any]],
+        policy: RiskPolicy | None,
+        parameters: Mapping[str, Any] | None,
     ) -> Decimal:
         """
         Deterministic Logarithmic Normalization:
@@ -121,7 +124,7 @@ class DynamicFrequencyCalculator(FrequencyMappingStrategy):
           - k = curvature constant
           - M = max_score (default 100.0)
         """
-        config = self._resolve_log_config(parameters)
+        config = self._resolve_log_config(policy, parameters)
 
         if frequency == 0:
             return config.min_score
@@ -151,13 +154,14 @@ class DynamicFrequencyCalculator(FrequencyMappingStrategy):
     def _calculate_linear(
         self,
         frequency: int,
-        parameters: Optional[Mapping[str, Any]],
+        policy: RiskPolicy | None,
+        parameters: Mapping[str, Any] | None,
     ) -> Decimal:
         """
         Linear Capped Normalization:
         Direct proportional scaling with an upper saturation ceiling.
         """
-        config = self._resolve_linear_config(parameters)
+        config = self._resolve_linear_config(policy, parameters)
 
         if frequency <= 0:
             return config.min_score
@@ -184,41 +188,63 @@ class DynamicFrequencyCalculator(FrequencyMappingStrategy):
 
     def _resolve_log_config(
         self,
-        parameters: Optional[Mapping[str, Any]],
+        policy: RiskPolicy | None,
+        parameters: Mapping[str, Any] | None,
     ) -> LogarithmicCurveConfig:
-        """Parses runtime configuration overrides for the logarithmic curve."""
-        if not parameters:
+        """Parses runtime configuration overrides for the logarithmic curve, with policy metadata fallback."""
+        merged_params: dict[str, Any] = {}
+
+        if policy and hasattr(policy, "metadata") and isinstance(policy.metadata, dict):
+            freq_policy_meta = policy.metadata.get("frequency_config", {})
+            if isinstance(freq_policy_meta, dict):
+                merged_params.update(freq_policy_meta)
+
+        if parameters:
+            merged_params.update(parameters)
+
+        if not merged_params:
             return self._default_log_config
 
         try:
             return LogarithmicCurveConfig(
                 saturation_count=int(
-                    parameters.get("saturation_count", self._default_log_config.saturation_count)
+                    merged_params.get("saturation_count", self._default_log_config.saturation_count)
                 ),
                 curvature_constant=float(
-                    parameters.get("curvature_constant", self._default_log_config.curvature_constant)
+                    merged_params.get("curvature_constant", self._default_log_config.curvature_constant)
                 ),
-                min_score=Decimal(str(parameters.get("min_score", self._default_log_config.min_score))),
-                max_score=Decimal(str(parameters.get("max_score", self._default_log_config.max_score))),
+                min_score=Decimal(str(merged_params.get("min_score", self._default_log_config.min_score))),
+                max_score=Decimal(str(merged_params.get("max_score", self._default_log_config.max_score))),
             )
         except (InvalidOperation, TypeError, ValueError):
             return self._default_log_config
 
     def _resolve_linear_config(
         self,
-        parameters: Optional[Mapping[str, Any]],
+        policy: RiskPolicy | None,
+        parameters: Mapping[str, Any] | None,
     ) -> LinearCappedCurveConfig:
-        """Parses runtime configuration overrides for the linear curve."""
-        if not parameters:
+        """Parses runtime configuration overrides for the linear curve, with policy metadata fallback."""
+        merged_params: dict[str, Any] = {}
+
+        if policy and hasattr(policy, "metadata") and isinstance(policy.metadata, dict):
+            freq_policy_meta = policy.metadata.get("frequency_config", {})
+            if isinstance(freq_policy_meta, dict):
+                merged_params.update(freq_policy_meta)
+
+        if parameters:
+            merged_params.update(parameters)
+
+        if not merged_params:
             return self._default_linear_config
 
         try:
             return LinearCappedCurveConfig(
                 cap_threshold=int(
-                    parameters.get("cap_threshold", self._default_linear_config.cap_threshold)
+                    merged_params.get("cap_threshold", self._default_linear_config.cap_threshold)
                 ),
-                min_score=Decimal(str(parameters.get("min_score", self._default_linear_config.min_score))),
-                max_score=Decimal(str(parameters.get("max_score", self._default_linear_config.max_score))),
+                min_score=Decimal(str(merged_params.get("min_score", self._default_linear_config.min_score))),
+                max_score=Decimal(str(merged_params.get("max_score", self._default_linear_config.max_score))),
             )
         except (InvalidOperation, TypeError, ValueError):
             return self._default_linear_config

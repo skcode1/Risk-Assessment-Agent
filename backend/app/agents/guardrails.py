@@ -1,18 +1,11 @@
-"""
-Post-Generation Guardrail Verification Engine for Explainable AI (XAI).
-Enforces absolute mathematical and categorical invariance on LLM completions:
-  1. Validates strict JSON syntax and schema completeness.
-  2. Parses and verifies that no hallucinated or mutated risk score exists.
-  3. Rejects any completion contradicting the deterministic score or category rating.
-  4. Detects and flags prompt injection leakage or prohibited advisory keywords.
-"""
 
-from dataclasses import dataclass, field
-from decimal import Decimal
+
 import json
 import logging
 import re
-from typing import Any, Dict, List, Optional, Set, Union
+from dataclasses import dataclass, field
+from decimal import Decimal
+from typing import Any
 
 from app.core.telemetry import get_tracer
 from app.domain.models.enums import ComponentDriver, RiskCategory
@@ -26,10 +19,10 @@ class GuardrailEvaluationResult:
     """Immutable audit outcome of the guardrail verification pipeline."""
 
     passed: bool
-    parsed_payload: Optional[Dict[str, Any]] = None
-    violation_reason: Optional[str] = None
-    checks_evaluated: Dict[str, bool] = field(default_factory=dict)
-    detected_score_mentions: List[str] = field(default_factory=list)
+    parsed_payload: dict[str, Any] | None = None
+    violation_reason: str | None = None
+    checks_evaluated: dict[str, bool] = field(default_factory=dict)
+    detected_score_mentions: list[str] = field(default_factory=list)
 
 
 class LLMGuardrailEnforcer:
@@ -54,7 +47,7 @@ class LLMGuardrailEnforcer:
     ]
 
     # Required JSON schema keys
-    _REQUIRED_SCHEMA_KEYS: Set[str] = {
+    _REQUIRED_SCHEMA_KEYS: set[str] = {
         "summary_narrative",
         "primary_driver",
         "key_factors",
@@ -68,8 +61,8 @@ class LLMGuardrailEnforcer:
     def verify(
         self,
         raw_response: str,
-        baseline_score: Union[Decimal, float, str],
-        baseline_rating: Union[RiskCategory, str],
+        baseline_score: Decimal | float | str,
+        baseline_rating: RiskCategory | str,
     ) -> GuardrailEvaluationResult:
         """
         Executes end-to-end invariant validation on the raw LLM completion string:
@@ -83,7 +76,7 @@ class LLMGuardrailEnforcer:
             span.set_attribute("baseline_score", str(baseline_score))
             span.set_attribute("baseline_rating", str(baseline_rating))
 
-            checks: Dict[str, bool] = {
+            checks: dict[str, bool] = {
                 "json_syntax_valid": False,
                 "schema_keys_complete": False,
                 "primary_driver_valid": False,
@@ -140,7 +133,7 @@ class LLMGuardrailEnforcer:
 
             # 6. Verify Score Invariance
             expected_score_dec = Decimal(str(baseline_score)).quantize(Decimal("0.1"))
-            detected_scores: List[str] = []
+            detected_scores: list[str] = []
 
             for match in self._SCORE_REGEX.finditer(combined_text):
                 score_str = match.group(1)
@@ -206,8 +199,8 @@ class LLMGuardrailEnforcer:
     @staticmethod
     def _failure(
         reason: str,
-        checks: Dict[str, bool],
-        detected_scores: Optional[List[str]] = None,
+        checks: dict[str, bool],
+        detected_scores: list[str] | None = None,
     ) -> GuardrailEvaluationResult:
         """Constructs a failed evaluation audit container."""
         return GuardrailEvaluationResult(

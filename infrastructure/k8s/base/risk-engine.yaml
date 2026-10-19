@@ -1,0 +1,193 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cyber-risk-engine
+  labels:
+    name: cyber-risk-engine
+    environment: production
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: risk-engine-config
+  namespace: cyber-risk-engine
+data:
+  ENVIRONMENT: "production"
+  PROJECT_NAME: "Cyber Risk Orchestration Engine"
+  DEBUG: "false"
+  LOG_LEVEL: "INFO"
+  SLIDING_WINDOW_SECONDS: "3600"
+  POSTGRES_SERVER: "postgres"
+  POSTGRES_PORT: "5432"
+  POSTGRES_DB: "risk_engine"
+  POSTGRES_USER: "postgres"
+  POSTGRES_POOL_SIZE: "20"
+  POSTGRES_MAX_OVERFLOW: "10"
+  DB_POOL_SIZE: "20"
+  DB_MAX_OVERFLOW: "10"
+  DB_POOL_TIMEOUT: "30"
+  DB_POOL_RECYCLE: "1800"
+  DB_ECHO: "false"
+  REDIS_HOST: "redis"
+  REDIS_PORT: "6379"
+  REDIS_DB: "0"
+  OPENSEARCH_HOST: "opensearch"
+  OPENSEARCH_PORT: "9200"
+  OPENSEARCH_USER: "admin"
+  OPENSEARCH_USE_SSL: "true"
+  OPENSEARCH_VERIFY_CERTS: "false"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
+  OTEL_SERVICE_NAME: "risk-engine-api"
+  JWT_ALGORITHM: "HS256"
+  ACCESS_TOKEN_EXPIRE_MINUTES: "15"
+  LLM_PROVIDER: "openai"
+  OPENAI_MODEL: "gpt-4o"
+  ANTHROPIC_MODEL: "claude-3-5-sonnet-20241022"
+  TEMPERATURE: "0.0"
+  MAX_TOKENS: "1024"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: risk-engine-secrets
+  namespace: cyber-risk-engine
+type: Opaque
+stringData:
+  POSTGRES_PASSWORD: "CHANGE_ME_IN_PRODUCTION"
+  REDIS_PASSWORD: "CHANGE_ME_IN_PRODUCTION"
+  OPENSEARCH_PASSWORD: "CHANGE_ME_IN_PRODUCTION"
+  OPENSEARCH_INITIAL_ADMIN_PASSWORD: "CHANGE_ME_IN_PRODUCTION"
+  JWT_SECRET_KEY: "CHANGE_ME_IN_PRODUCTION_MIN_32_CHARS"
+  OPENAI_API_KEY: ""
+  ANTHROPIC_API_KEY: ""
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: risk-engine-backend
+  namespace: cyber-risk-engine
+  labels:
+    app: risk-engine-backend
+    version: v1
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: risk-engine-backend
+  template:
+    metadata:
+      labels:
+        app: risk-engine-backend
+        version: v1
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: risk-engine-backend
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+        - name: backend
+          image: ghcr.io/your-org/cyber-risk-engine-backend:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8000
+              name: http
+          envFrom:
+            - configMapRef:
+                name: risk-engine-config
+            - secretRef:
+                name: risk-engine-secrets
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "2000m"
+              memory: "2Gi"
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: risk-engine-backend
+  namespace: cyber-risk-engine
+  labels:
+    app: risk-engine-backend
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8000
+      targetPort: 8000
+      protocol: TCP
+      name: http
+  selector:
+    app: risk-engine-backend
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: risk-engine-backend-hpa
+  namespace: cyber-risk-engine
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: risk-engine-backend
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Percent
+          value: 10
+          periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 15
+        - type: Pods
+          value: 4
+          periodSeconds: 15
+      selectPolicy: Max

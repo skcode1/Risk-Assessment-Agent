@@ -16,7 +16,9 @@ from app.core.database import Base
 # Preload all model modules so Base.metadata is fully populated for autogenerate
 from app.db.models import (
     assessment,
+    audit,
     detection,
+    explanation,
     investigation,
     policy,
 )

@@ -4,22 +4,25 @@ Maps correlated investigation telemetry, lateral endpoint spread,
 and recurrence metrics feeding into the deterministic risk scoring kernel.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
     CheckConstraint,
     DateTime,
-    Enum as SAEnum,
     ForeignKey,
     Index,
     Integer,
     Numeric,
     String,
 )
-from sqlalchemy.dialects.postgresql import JSONB, UUID as PGUUID
+from sqlalchemy import (
+    Enum as SAEnum,
+)
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -89,26 +92,26 @@ class InvestigationModel(Base):
     )
 
     # Optional qualitative severity hint from correlation rules [0.0, 100.0]
-    severity_hint: Mapped[Optional[Decimal]] = mapped_column(
+    severity_hint: Mapped[Decimal | None] = mapped_column(
         Numeric(precision=5, scale=1, asdecimal=True),
         nullable=True,
     )
 
     # Itemized network endpoints touched: [ {"endpoint_id": str, "endpoint_class": str, "is_compromised": bool} ]
-    touched_endpoints_detail: Mapped[List[Dict[str, Any]]] = mapped_column(
+    touched_endpoints_detail: Mapped[list[dict[str, Any]]] = mapped_column(
         JSONB,
         nullable=False,
         default=list,
     )
 
     # Extended telemetry context (e.g., process lineage, network flows, sandboxing IOCs)
-    telemetry_metadata: Mapped[Dict[str, Any]] = mapped_column(
+    telemetry_metadata: Mapped[dict[str, Any]] = mapped_column(
         JSONB,
         nullable=False,
         default=dict,
     )
 
-    investigated_by: Mapped[Optional[str]] = mapped_column(
+    investigated_by: Mapped[str | None] = mapped_column(
         String(100),
         nullable=True,
     )
@@ -116,15 +119,15 @@ class InvestigationModel(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
-        default=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
         index=True,
     )
 
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
     )
 
     # Relationships

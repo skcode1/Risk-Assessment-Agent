@@ -3,10 +3,9 @@ Pydantic v2 Schema Definitions for RiskAssessment Payloads.
 Fully aligned with canonical schemas/risk/risk-assessment-v1.json and integration test suites.
 """
 
-from datetime import datetime, timezone
-from enum import Enum
-from typing import TYPE_CHECKING, Annotated, Any, Dict, List, Optional, Union
-from uuid import UUID, uuid4
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Annotated, Any
+from uuid import UUID
 
 from pydantic import (
     BaseModel,
@@ -15,19 +14,11 @@ from pydantic import (
     field_validator,
 )
 
-from app.domain.models.enums import DetectionSeverity, DetectionSourceType
+from app.domain.models.enums import DetectionSeverity, DetectionSourceType, RiskCategory
 
 if TYPE_CHECKING:
     from app.db.models.assessment import RiskAssessmentModel
     from app.domain.models.assessment import RiskAssessment
-
-
-class RiskCategory(str, Enum):
-    """Categorical risk rating determined by deterministic thresholds."""
-    LOW = "LOW"
-    MEDIUM = "MEDIUM"
-    HIGH = "HIGH"
-    CRITICAL = "CRITICAL"
 
 
 class RiskComponentsBreakdown(BaseModel):
@@ -45,8 +36,8 @@ class DetectionMetricsRequest(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     confidence: Annotated[float, Field(..., ge=0.0, le=100.0)]
-    fidelity: Annotated[Optional[float], Field(default=None, ge=0.0, le=1.0)]
-    rule_accuracy_hint: Annotated[Optional[float], Field(default=None, ge=0.0, le=100.0)]
+    fidelity: Annotated[float | None, Field(default=None, ge=0.0, le=1.0)]
+    rule_accuracy_hint: Annotated[float | None, Field(default=None, ge=0.0, le=100.0)]
 
 
 class DetectionContextRequest(BaseModel):
@@ -55,12 +46,12 @@ class DetectionContextRequest(BaseModel):
 
     rule_id: Annotated[str, Field(..., min_length=1, max_length=128)]
     rule_name: Annotated[str, Field(..., min_length=1, max_length=255)]
-    technique_id: Annotated[Optional[str], Field(default=None)]
-    source_ip: Annotated[Optional[str], Field(default=None, max_length=45)]
-    destination_ip: Annotated[Optional[str], Field(default=None, max_length=45)]
-    hostname: Annotated[Optional[str], Field(default=None, max_length=255)]
-    username: Annotated[Optional[str], Field(default=None, max_length=128)]
-    raw_payload: Annotated[Dict[str, Any], Field(default_factory=dict)]
+    technique_id: Annotated[str | None, Field(default=None)]
+    source_ip: Annotated[str | None, Field(default=None, max_length=45)]
+    destination_ip: Annotated[str | None, Field(default=None, max_length=45)]
+    hostname: Annotated[str | None, Field(default=None, max_length=255)]
+    username: Annotated[str | None, Field(default=None, max_length=128)]
+    raw_payload: Annotated[dict[str, Any], Field(default_factory=dict)]
 
 
 class DetectionEventRequest(BaseModel):
@@ -72,7 +63,7 @@ class DetectionEventRequest(BaseModel):
     """
     model_config = ConfigDict(extra="ignore")
 
-    event_id: Annotated[Optional[UUID], Field(default=None)]
+    event_id: Annotated[UUID | None, Field(default=None)]
     correlation_id: Annotated[UUID, Field(...)]
     source_type: Annotated[DetectionSourceType, Field(default=DetectionSourceType.EDR)]
     severity: Annotated[DetectionSeverity, Field(default=DetectionSeverity.HIGH)]
@@ -84,10 +75,10 @@ class AssessmentBase(BaseModel):
     """Core domain fields representing a risk evaluation."""
     model_config = ConfigDict(str_strip_whitespace=True, extra="ignore")
 
-    source_ip: Annotated[Optional[str], Field(default=None, max_length=64)]
-    detection_id: Annotated[Optional[UUID], Field(default=None)]
-    investigation_id: Annotated[Optional[UUID], Field(default=None)]
-    policy_id: Annotated[Optional[UUID], Field(default=None)]
+    source_ip: Annotated[str | None, Field(default=None, max_length=64)]
+    detection_id: Annotated[UUID | None, Field(default=None)]
+    investigation_id: Annotated[UUID | None, Field(default=None)]
+    policy_id: Annotated[UUID | None, Field(default=None)]
 
 
 class AssessmentCreateRequest(AssessmentBase):
@@ -97,10 +88,10 @@ class AssessmentCreateRequest(AssessmentBase):
     """
     model_config = ConfigDict(extra="ignore", str_strip_whitespace=True)
 
-    assessment_id: Annotated[Optional[UUID], Field(default=None)]
-    detection_event: Annotated[Optional[DetectionEventRequest], Field(default=None)]
-    investigation_result: Annotated[Optional[Any], Field(default=None)]
-    components_override: Annotated[Optional[RiskComponentsBreakdown], Field(default=None)]
+    assessment_id: Annotated[UUID | None, Field(default=None)]
+    detection_event: Annotated[DetectionEventRequest | None, Field(default=None)]
+    investigation_result: Annotated[Any | None, Field(default=None)]
+    components_override: Annotated[RiskComponentsBreakdown | None, Field(default=None)]
 
 
 RiskAssessmentCreateRequest = AssessmentCreateRequest
@@ -114,15 +105,15 @@ class AssessmentResponse(AssessmentBase):
     risk_score: Annotated[float, Field(..., ge=0.0, le=100.0)]
     rating: Annotated[RiskCategory, Field(...)]
     components: Annotated[RiskComponentsBreakdown, Field(...)]
-    applied_policy: Annotated[Optional[Dict[str, Any]], Field(default=None)]
-    created_at: Annotated[datetime, Field(default_factory=lambda: datetime.now(timezone.utc))]
+    applied_policy: Annotated[dict[str, Any] | None, Field(default=None)]
+    created_at: Annotated[datetime, Field(default_factory=lambda: datetime.now(UTC))]
 
     @field_validator("created_at")
     @classmethod
     def ensure_utc(cls, v: datetime) -> datetime:
         if v.tzinfo is None:
-            return v.replace(tzinfo=timezone.utc)
-        return v.astimezone(timezone.utc)
+            return v.replace(tzinfo=UTC)
+        return v.astimezone(UTC)
 
     @classmethod
     def from_domain_and_model(
@@ -142,7 +133,7 @@ class AssessmentResponse(AssessmentBase):
             rating=assessment.rating.value,
             components=assessment.components.to_dict(),
             applied_policy=assessment.applied_policy.to_dict(),
-            created_at=assessment_model.created_at or datetime.now(timezone.utc),
+            created_at=assessment_model.created_at or datetime.now(UTC),
         )
 
 
@@ -153,10 +144,10 @@ class AssessmentDetailResponse(AssessmentResponse):
     """Expanded audit payload returned by GET /api/v1/risk-assessments/{id}."""
     model_config = ConfigDict(from_attributes=True, extra="ignore")
 
-    policy_version: Annotated[Optional[Union[str, int]], Field(default=1)]
-    narrative_explanation: Annotated[Optional[str], Field(default=None)]
-    mitre_attack_context: Annotated[List[str], Field(default_factory=list)]
-    metadata: Annotated[Dict[str, Any], Field(default_factory=dict)]
+    policy_version: Annotated[str | int | None, Field(default=1)]
+    narrative_explanation: Annotated[str | None, Field(default=None)]
+    mitre_attack_context: Annotated[list[str], Field(default_factory=list)]
+    metadata: Annotated[dict[str, Any], Field(default_factory=dict)]
 
     @classmethod
     def from_record(cls, record: "RiskAssessmentModel") -> "AssessmentDetailResponse":
@@ -169,7 +160,7 @@ class AssessmentDetailResponse(AssessmentResponse):
         onto the response contract.
         """
         snapshot = record.applied_policy_snapshot or {}
-        metadata: Dict[str, Any] = {}
+        metadata: dict[str, Any] = {}
         if record.override_score is not None:
             metadata["override"] = {
                 "score": float(record.override_score),
@@ -209,14 +200,14 @@ class AssessmentOverrideRequest(BaseModel):
     override_score: Annotated[float, Field(..., ge=0.0, le=100.0)]
     override_rating: RiskCategory = Field(...)
     justification: Annotated[str, Field(..., min_length=10, max_length=1024)]
-    ticket_reference: Annotated[Optional[str], Field(default=None, max_length=64)]
+    ticket_reference: Annotated[str | None, Field(default=None, max_length=64)]
 
 
 class AssessmentListResponse(BaseModel):
     """Paginated collection wrapper for risk assessment entities."""
     model_config = ConfigDict(from_attributes=True, extra="ignore")
 
-    items: Annotated[List[AssessmentResponse], Field(default_factory=list)]
+    items: Annotated[list[AssessmentResponse], Field(default_factory=list)]
     total: Annotated[int, Field(default=0, ge=0)]
     limit: Annotated[int, Field(default=50, ge=1)]
     offset: Annotated[int, Field(default=0, ge=0)]

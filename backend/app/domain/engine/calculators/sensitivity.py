@@ -5,9 +5,10 @@ factoring in individual touched endpoints, lateral spread, and policy-configured
 """
 
 from abc import ABC, abstractmethod
+from collections.abc import Mapping
 from dataclasses import dataclass
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
-from typing import Any, Dict, List, Mapping, Optional
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
+from typing import Any
 
 from app.domain.models.enums import EndpointClass
 from app.domain.models.investigation import InvestigationResult, TouchedEndpoint
@@ -21,13 +22,12 @@ class SensitivityMappingStrategy(ABC):
     def calculate(
         self,
         investigation: InvestigationResult,
-        policy: Optional[RiskPolicy] = None,
-        parameters: Optional[Mapping[str, Any]] = None,
+        policy: RiskPolicy | None = None,
+        parameters: Mapping[str, Any] | None = None,
     ) -> Decimal:
         """
         Calculates the normalized Sensitivity sub-score bounded to [0.0, 100.0].
         """
-        pass
 
 
 @dataclass(frozen=True, slots=True)
@@ -63,15 +63,15 @@ class DynamicSensitivityCalculator(SensitivityMappingStrategy):
 
     def __init__(
         self,
-        default_config: Optional[SensitivityAggregationConfig] = None,
+        default_config: SensitivityAggregationConfig | None = None,
     ) -> None:
         self._config = default_config or SensitivityAggregationConfig()
 
     def calculate(
         self,
         investigation: InvestigationResult,
-        policy: Optional[RiskPolicy] = None,
-        parameters: Optional[Mapping[str, Any]] = None,
+        policy: RiskPolicy | None = None,
+        parameters: Mapping[str, Any] | None = None,
     ) -> Decimal:
         """
         Calculates normalized Sensitivity sub-score:
@@ -109,7 +109,7 @@ class DynamicSensitivityCalculator(SensitivityMappingStrategy):
     def _calculate_from_dominant_class(
         self,
         dominant_class: EndpointClass,
-        policy: Optional[RiskPolicy],
+        policy: RiskPolicy | None,
     ) -> Decimal:
         """
         Extracts sensitivity weight for the single dominant endpoint class.
@@ -124,8 +124,8 @@ class DynamicSensitivityCalculator(SensitivityMappingStrategy):
 
     def _calculate_from_endpoint_collection(
         self,
-        endpoints: List[TouchedEndpoint],
-        policy: Optional[RiskPolicy],
+        endpoints: list[TouchedEndpoint],
+        policy: RiskPolicy | None,
         config: SensitivityAggregationConfig,
     ) -> Decimal:
         """
@@ -143,8 +143,7 @@ class DynamicSensitivityCalculator(SensitivityMappingStrategy):
             if endpoint.is_compromised:
                 ep_weight = ep_weight * config.compromise_multiplier
 
-            if ep_weight > highest_weight:
-                highest_weight = ep_weight
+            highest_weight = max(highest_weight, ep_weight)
 
         return highest_weight
 
@@ -174,7 +173,7 @@ class DynamicSensitivityCalculator(SensitivityMappingStrategy):
 
     def _resolve_config(
         self,
-        parameters: Optional[Mapping[str, Any]],
+        parameters: Mapping[str, Any] | None,
     ) -> SensitivityAggregationConfig:
         """Dynamically parses and merges runtime parameters over defaults."""
         if not parameters:

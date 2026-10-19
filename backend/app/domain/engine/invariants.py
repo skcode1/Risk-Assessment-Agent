@@ -4,14 +4,14 @@ Enforces strict IEEE-754 precision immunity, rounding rules, range bounds [0.0, 
 non-null guarantees, and contract integrity across all components and engine outputs.
 """
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
-from typing import Any, Mapping, Optional, Sequence
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
+from typing import Any
 from uuid import UUID
 
 from app.domain.models.assessment import RiskAssessment, RiskComponents
 from app.domain.models.detection import DetectionEvent
-from app.domain.models.enums import RiskCategory
 from app.domain.models.investigation import InvestigationResult
 from app.domain.models.policy import RiskPolicy
 
@@ -19,7 +19,7 @@ from app.domain.models.policy import RiskPolicy
 class InvariantViolationError(ValueError):
     """Raised when an architectural, mathematical, or integrity invariant is violated."""
 
-    def __init__(self, rule_name: str, message: str, context: Optional[Mapping[str, Any]] = None) -> None:
+    def __init__(self, rule_name: str, message: str, context: Mapping[str, Any] | None = None) -> None:
         self.rule_name = rule_name
         self.context = dict(context) if context else {}
         # Public contract used by exception handlers and the orchestration
@@ -56,7 +56,7 @@ class ScoringInvariantVerifier:
     Executes pre-calculation, in-flight component verification, and post-calculation validation.
     """
 
-    def __init__(self, config: Optional[InvariantRuleConfig] = None) -> None:
+    def __init__(self, config: InvariantRuleConfig | None = None) -> None:
         self._config = config or InvariantRuleConfig()
 
     def enforce_non_null(self, target: Any, param_name: str) -> Any:
@@ -69,7 +69,7 @@ class ScoringInvariantVerifier:
             )
         return target
 
-    def enforce_valid_uuid(self, identifier: Optional[UUID], field_name: str) -> UUID:
+    def enforce_valid_uuid(self, identifier: UUID | None, field_name: str) -> UUID:
         """Enforces non-null tracking ID format for telemetry correlation."""
         self.enforce_non_null(identifier, field_name)
         if not isinstance(identifier, UUID):

@@ -4,21 +4,20 @@ Tests authentication, authorization scopes, policy mutation permissions,
 analyst score overrides, and containment action approvals across SOC tiers.
 """
 
-from datetime import datetime, timezone
-from decimal import Decimal
-from typing import AsyncGenerator, Dict, List, Optional
-from uuid import UUID, uuid4
+from collections.abc import AsyncGenerator
+from datetime import UTC, datetime
+from uuid import uuid4
+
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from jose import jwt
 
+# Secret and algorithm configuration for testing token generation
+from app.core.config import settings
 from app.domain.models.enums import RiskCategory
 from app.main import app
 
-
-# Secret and algorithm configuration for testing token generation
-from app.core.config import settings
 TEST_SECRET_KEY = settings.security.JWT_SECRET_KEY.get_secret_value()
 TEST_ALGORITHM = settings.security.JWT_ALGORITHM
 
@@ -38,10 +37,10 @@ class SystemRole:
 
 
 def create_mock_jwt_token(
-    user_id: Optional[str] = None,
-    username: Optional[str] = None,
-    roles: Optional[List[str]] = None,
-    scopes: Optional[List[str]] = None,
+    user_id: str | None = None,
+    username: str | None = None,
+    roles: list[str] | None = None,
+    scopes: list[str] | None = None,
 ) -> str:
     """Generates an RFC 7519 compliant JSON Web Token for dynamic authorization testing."""
     payload = {
@@ -49,8 +48,8 @@ def create_mock_jwt_token(
         "preferred_username": username or "analyst",
         "roles": roles or [SystemRole.SOC_ANALYST_TIER_1],
         "scope": " ".join(scopes or ["assessments:read"]),
-        "iat": datetime.now(timezone.utc).timestamp(),
-        "exp": datetime.now(timezone.utc).timestamp() + 3600,
+        "iat": datetime.now(UTC).timestamp(),
+        "exp": datetime.now(UTC).timestamp() + 3600,
     }
     return jwt.encode(payload, TEST_SECRET_KEY, algorithm=TEST_ALGORITHM)
 
@@ -64,7 +63,7 @@ async def security_client() -> AsyncGenerator[AsyncClient, None]:
 
 
 @pytest.fixture
-def sample_policy_payload() -> Dict[str, object]:
+def sample_policy_payload() -> dict[str, object]:
     """Dynamic risk policy definition for testing policy modification endpoints."""
     return {
         "name": "Updated Operational Policy",
@@ -145,7 +144,7 @@ class TestPolicyGovernancePermissions:
     async def test_analyst_cannot_create_or_mutate_policy(
         self,
         security_client: AsyncClient,
-        sample_policy_payload: Dict[str, object],
+        sample_policy_payload: dict[str, object],
     ) -> None:
         """Ensures analysts with standard operational privileges cannot publish new risk policies."""
         token = create_mock_jwt_token(
@@ -164,7 +163,7 @@ class TestPolicyGovernancePermissions:
     async def test_security_admin_can_manage_policies(
         self,
         security_client: AsyncClient,
-        sample_policy_payload: Dict[str, object],
+        sample_policy_payload: dict[str, object],
     ) -> None:
         """Ensures Security Administrators with policies:admin scope can register new policies."""
         token = create_mock_jwt_token(
