@@ -1,74 +1,108 @@
-# Docker ignore patterns for Cyber Risk Orchestration Engine
+# ==============================================================================
+# Security & Sensitive Credentials (Zero Tolerance)
+# ==============================================================================
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+*.pfx
+*.p12
+*.vault
+id_rsa
+id_ecdsa
+id_ed25519
 
-# Git
-.git
+# ==============================================================================
+# Version Control
+# ==============================================================================
+.git/
 .gitignore
 .gitattributes
+.gitmodules
 
-# Documentation
-*.md
-docs/
-README*
-
-# Development
-*.pyc
+# ==============================================================================
+# Python & Virtual Environments
+# ==============================================================================
 __pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+venv/
+.venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# ==============================================================================
+# Testing, Linting & Quality Assurance
+# ==============================================================================
+tests/
+conftest.py
+pytest.ini
 .pytest_cache/
 .coverage
+.coverage.*
+coverage.xml
+coverage_html/
 htmlcov/
 .tox/
-.venv/
-venv/
-env/
+.nox/
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
 
-# IDE
+# ==============================================================================
+# CI/CD, Infrastructure & Orchestration (Targeted Exclusions)
+# ==============================================================================
+.github/
+.gitlab-ci.yml
+docker-compose*.yml
+infrastructure/docker-compose*.yml
+k8s/
+helm/
+terraform/
+
+# ==============================================================================
+# Documentation & Non-Code Assets
+# ==============================================================================
+*.md
+docs/
+architecture/
+LICENSE*
+
+# ==============================================================================
+# IDE & System Garbage
+# ==============================================================================
 .vscode/
 .idea/
 *.swp
 *.swo
-
-# Testing
-tests/
-conftest.py
-pytest.ini
-
-# Configuration (local overrides)
-.env
-.env.local
-.env.*.local
-
-# Logs
-*.log
-logs/
-
-# Database
-*.db
-*.sqlite
-
-# OS
+*~
 .DS_Store
 Thumbs.db
-
-# Build artifacts
-dist/
-build/
-*.egg-info/
-
-# Docker
-Dockerfile*
-docker-compose*.yml
-.dockerignore
-
-# Kubernetes
-k8s/
-*.yaml
-*.yml
-
-# CI/CD
-.github/
-.gitlab-ci.yml
-
-# Misc
 *.tmp
 *.temp
 .cache/
+*.log
+logs/
+*.sqlite
+*.db
