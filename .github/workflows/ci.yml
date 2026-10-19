@@ -235,12 +235,22 @@ jobs:
       - name: Build and load local image for Trivy scan
         uses: docker/build-push-action@v5
         with:
-          context: ./backend
-          load: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+        context: .
+        context: .
+        file: ./backend/Dockerfile
+        load: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max       
+
+
+          # context: ./backend
+          # load: true
+          # tags: ${{ steps.meta.outputs.tags }}
+          # labels: ${{ steps.meta.outputs.labels }}
+          # cache-from: type=gha
+          # cache-to: type=gha,mode=max
 
       # - name: Scan for vulnerabilities (Trivy)
       #   uses: aquasecurity/trivy-action@master
@@ -270,7 +280,8 @@ jobs:
       - name: Push image to Container Registry
         uses: docker/build-push-action@v5
         with:
-          context: ./backend
+          context: .
+          file: ./backend/Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
