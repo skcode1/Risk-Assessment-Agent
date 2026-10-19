@@ -23,6 +23,7 @@ from app.schemas.assessment import RiskCategory, RiskComponentsBreakdown
 
 class ExplanationSource(str, Enum):
     """Origin generator of the explanation narrative."""
+
     DETERMINISTIC_TEMPLATE = "DETERMINISTIC_TEMPLATE"
     CONSTRAINED_LLM = "CONSTRAINED_LLM"
     ANALYST_OVERRIDE = "ANALYST_OVERRIDE"
@@ -30,6 +31,7 @@ class ExplanationSource(str, Enum):
 
 class ComponentDriver(str, Enum):
     """Indicates which sub-score was the dominant contributor to the risk score."""
+
     BEHAVIOR = "BEHAVIOR"
     FREQUENCY = "FREQUENCY"
     SENSITIVITY = "SENSITIVITY"
@@ -38,15 +40,24 @@ class ComponentDriver(str, Enum):
 
 class EvidenceCitation(BaseModel):
     """Direct reference linking an explanation claim back to immutable investigation telemetry."""
+
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     claim: Annotated[
         str,
-        Field(..., min_length=5, max_length=512, description="The textual statement or observation."),
+        Field(
+            ...,
+            min_length=5,
+            max_length=512,
+            description="The textual statement or observation.",
+        ),
     ]
     source_field: Annotated[
         str,
-        Field(..., description="Telemetry or event property backing this claim (e.g., 'event_frequency')."),
+        Field(
+            ...,
+            description="Telemetry or event property backing this claim (e.g., 'event_frequency').",
+        ),
     ]
     observed_value: Annotated[
         Any,
@@ -56,9 +67,13 @@ class EvidenceCitation(BaseModel):
 
 class RiskExplanationBase(BaseModel):
     """Base fields representing human-readable and analyst-facing explainability."""
+
     assessment_id: Annotated[
         UUID,
-        Field(..., description="Reference ID to the authoritative RiskAssessment being explained."),
+        Field(
+            ...,
+            description="Reference ID to the authoritative RiskAssessment being explained.",
+        ),
     ]
     summary_narrative: Annotated[
         str,
@@ -67,12 +82,17 @@ class RiskExplanationBase(BaseModel):
             min_length=10,
             max_length=2048,
             description="Concise human-readable explanation explaining the risk rating.",
-            examples=["High risk primarily driven by high detection confidence and repeated event frequency."],
+            examples=[
+                "High risk primarily driven by high detection confidence and repeated event frequency."
+            ],
         ),
     ]
     primary_driver: Annotated[
         ComponentDriver,
-        Field(..., description="Identified leading sub-score contributing most heavily to the score."),
+        Field(
+            ...,
+            description="Identified leading sub-score contributing most heavily to the score.",
+        ),
     ]
     key_factors: Annotated[
         list[str],
@@ -90,7 +110,10 @@ class RiskExplanationBase(BaseModel):
     ]
     evidence_citations: Annotated[
         list[EvidenceCitation],
-        Field(default_factory=list, description="Verifiable data links to raw investigation facts."),
+        Field(
+            default_factory=list,
+            description="Verifiable data links to raw investigation facts.",
+        ),
     ]
 
 
@@ -99,6 +122,7 @@ class RiskExplanationRequest(BaseModel):
     Contract fed into the Explanation Layer.
     Supplies immutable ground truth from the deterministic kernel so the explainer cannot hallucinate.
     """
+
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     assessment_id: Annotated[UUID, Field(...)]
@@ -109,21 +133,32 @@ class RiskExplanationRequest(BaseModel):
     policy_version: Annotated[str, Field(..., min_length=1)]
     telemetry_digest: Annotated[
         dict[str, Any],
-        Field(default_factory=dict, description="Raw facts from InvestigationResult passed for evidence grounding."),
+        Field(
+            default_factory=dict,
+            description="Raw facts from InvestigationResult passed for evidence grounding.",
+        ),
     ]
 
 
 class RiskExplanationCreate(RiskExplanationBase):
     """Payload model received from the explanation generator or LLM inference task."""
+
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     source: Annotated[
         ExplanationSource,
-        Field(default=ExplanationSource.CONSTRAINED_LLM, description="Technology that created this narrative."),
+        Field(
+            default=ExplanationSource.CONSTRAINED_LLM,
+            description="Technology that created this narrative.",
+        ),
     ]
     model_identifier: Annotated[
         str | None,
-        Field(default=None, max_length=128, description="Model tag if generated via LLM (e.g., 'gpt-4o-mini')."),
+        Field(
+            default=None,
+            max_length=128,
+            description="Model tag if generated via LLM (e.g., 'gpt-4o-mini').",
+        ),
     ]
     prompt_tokens: Annotated[int | None, Field(default=None, ge=0)]
     completion_tokens: Annotated[int | None, Field(default=None, ge=0)]
@@ -134,6 +169,7 @@ class RiskExplanation(RiskExplanationBase):
     Authoritative persisted explainability entity.
     Linked to the RiskAssessment and preserved in the audit store.
     """
+
     model_config = ConfigDict(
         from_attributes=True,
         frozen=True,
@@ -143,7 +179,10 @@ class RiskExplanation(RiskExplanationBase):
 
     explanation_id: Annotated[
         UUID,
-        Field(default_factory=uuid4, description="Unique identifier for this explanation record."),
+        Field(
+            default_factory=uuid4,
+            description="Unique identifier for this explanation record.",
+        ),
     ]
     source: Annotated[ExplanationSource, Field(...)]
     model_identifier: Annotated[str | None, Field(default=None)]
@@ -163,7 +202,9 @@ class RiskExplanation(RiskExplanationBase):
         return v.astimezone(UTC)
 
     @classmethod
-    def from_create(cls, payload: RiskExplanationCreate, explanation_id: UUID | None = None) -> "RiskExplanation":
+    def from_create(
+        cls, payload: RiskExplanationCreate, explanation_id: UUID | None = None
+    ) -> "RiskExplanation":
         """Factory method normalizing RiskExplanationCreate into an authoritative RiskExplanation record."""
         return cls(
             explanation_id=explanation_id or uuid4(),

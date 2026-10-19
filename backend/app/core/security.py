@@ -1,5 +1,3 @@
-
-
 import asyncio
 import logging
 import time
@@ -40,14 +38,24 @@ JWKS_CACHE_TTL = 3600  # 1 hour
 class TokenClaims(BaseModel):
     """Authoritative representation of verified JWT token claims."""
 
-    sub: str = Field(..., description="Subject identifier (User/Agent UUID or system identifier)")
-    preferred_username: str | None = Field(default=None, description="Human-readable identity name")
-    roles: list[str] = Field(default_factory=list, description="Assigned operational security roles")
-    scopes: list[str] = Field(default_factory=list, description="Granted permission scopes")
+    sub: str = Field(
+        ..., description="Subject identifier (User/Agent UUID or system identifier)"
+    )
+    preferred_username: str | None = Field(
+        default=None, description="Human-readable identity name"
+    )
+    roles: list[str] = Field(
+        default_factory=list, description="Assigned operational security roles"
+    )
+    scopes: list[str] = Field(
+        default_factory=list, description="Granted permission scopes"
+    )
     exp: datetime = Field(..., description="Token expiration timestamp in UTC")
     iat: datetime = Field(..., description="Token issuance timestamp in UTC")
     jti: str | None = Field(default=None, description="JWT ID for token tracking")
-    token_type: str = Field(default="access", description="Token type: access or refresh")
+    token_type: str = Field(
+        default="access", description="Token type: access or refresh"
+    )
 
     @property
     def subject_uuid(self) -> UUID | None:
@@ -78,22 +86,24 @@ async def _fetch_jwks(jwks_url: str) -> dict[str, Any]:
 
 async def get_jwks() -> dict[str, Any]:
     """Get JWKS with caching."""
-    global _jwks_cache
-    
+    # global _jwks_cache
+
     jwks_url = settings.security.JWT_JWKS_URL
     if not jwks_url:
         raise ValueError("JWT_JWKS_URL must be configured for RS256 validation")
-    
+
     async with _jwks_lock:
         now = time.time()
         if now - _jwks_cache["fetched_at"] < JWKS_CACHE_TTL and _jwks_cache["keys"]:
             return _jwks_cache["keys"]
-        
+
         try:
             jwks_data = await _fetch_jwks(jwks_url)
             _jwks_cache["keys"] = jwks_data.get("keys", {})
             _jwks_cache["fetched_at"] = now
-            logger.info("JWKS refreshed from %s (%d keys)", jwks_url, len(_jwks_cache["keys"]))
+            logger.info(
+                "JWKS refreshed from %s (%d keys)", jwks_url, len(_jwks_cache["keys"])
+            )
         except Exception as e:
             logger.error("Failed to fetch JWKS: %s", e)
             if not _jwks_cache["keys"]:
@@ -101,13 +111,13 @@ async def get_jwks() -> dict[str, Any]:
                     message="Unable to fetch JWKS for token validation",
                     context={"jwks_url": jwks_url, "error": str(e)},
                 )
-        
+
         return _jwks_cache["keys"]
 
 
 def _get_rsa_key_from_jwks(token: str, jwks: dict[str, Any]) -> RSAKey:
     """Extract RSA key from JWKS matching the token's kid."""
-    
+
     # Get kid from token header
     try:
         header = jwt.get_unverified_header(token)
@@ -116,18 +126,18 @@ def _get_rsa_key_from_jwks(token: str, jwks: dict[str, Any]) -> RSAKey:
             message=f"Invalid token header: {e}",
             context={"token_error": str(e)},
         )
-    
+
     kid = header.get("kid")
     if not kid:
         raise AuthenticationException(
             message="Token header missing 'kid' (key ID) required for JWKS validation",
         )
-    
+
     # Find matching key in JWKS
     for key in jwks.get("keys", []):
         if key.get("kid") == kid:
             return RSAKey(key, algorithm="RS256")
-    
+
     raise AuthenticationException(
         message=f"No matching key found in JWKS for kid: {kid}",
         context={"kid": kid},
@@ -145,7 +155,7 @@ def create_access_token(
     """
     Creates an RFC 7519 compliant JSON Web Token signed with RS256.
     Enforces UTC timestamps and dynamically embeds roles and scope permissions.
-    
+
     For RS256, requires JWT_PRIVATE_KEY (PEM format) in settings or secrets.
     Falls back to HS256 with JWT_SECRET_KEY if RS256 not configured.
     """
@@ -154,10 +164,15 @@ def create_access_token(
         expire = now + expires_delta
     else:
         # Default to 15 minutes for access tokens
-        default_minutes = 15 if token_type == "access" else settings.security.ACCESS_TOKEN_EXPIRE_MINUTES
+        default_minutes = (
+            15
+            if token_type == "access"
+            else settings.security.ACCESS_TOKEN_EXPIRE_MINUTES
+        )
         expire = now + timedelta(minutes=default_minutes)
 
     import uuid
+
     claims: dict[str, Any] = {
         "sub": subject,
         "iat": int(now.timestamp()),
@@ -172,7 +187,7 @@ def create_access_token(
 
     # Determine signing algorithm and key
     algorithm = getattr(settings.security, "JWT_ALGORITHM", "RS256")
-    
+
     if algorithm == "RS256":
         # Load private key from settings or secrets
         private_key = getattr(settings.security, "JWT_PRIVATE_KEY", None)
@@ -214,13 +229,13 @@ async def decode_and_verify_token(token: str) -> TokenClaims:
     Raises AuthenticationException on signature invalidity, expiration, or format corruption.
     """
     algorithm = getattr(settings.security, "JWT_ALGORITHM", "RS256")
-    
+
     try:
         if algorithm == "RS256":
             # Get JWKS and find matching key
             jwks = await get_jwks()
             rsa_key = _get_rsa_key_from_jwks(token, {"keys": jwks})
-            
+
             payload = jwt.decode(
                 token,
                 rsa_key,
@@ -248,12 +263,16 @@ async def decode_and_verify_token(token: str) -> TokenClaims:
     if not raw_sub or not raw_exp or not raw_iat:
         raise AuthenticationException(
             message="Token payload is missing mandatory RFC 7519 standard claims.",
-            context={"missing_claims": [k for k in ("sub", "exp", "iat") if not payload.get(k)]},
+            context={
+                "missing_claims": [
+                    k for k in ("sub", "exp", "iat") if not payload.get(k)
+                ]
+            },
         )
 
     # Check token type
     token_type = payload.get("token_type", "access")
-    
+
     # Scopes can be formatted either as space-delimited string or JSON list
     raw_scope = payload.get("scope", "")
     if isinstance(raw_scope, str):
@@ -336,7 +355,9 @@ class RoleChecker:
     def __init__(self, allowed_roles: Sequence[str]) -> None:
         self.allowed_roles = set(allowed_roles)
 
-    def __call__(self, claims: TokenClaims = Depends(get_current_user_claims)) -> TokenClaims:
+    def __call__(
+        self, claims: TokenClaims = Depends(get_current_user_claims)
+    ) -> TokenClaims:
         if not self.allowed_roles:
             return claims
 

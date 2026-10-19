@@ -74,7 +74,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await init_db_engine()
     await init_redis_client()
 
-    logger.info("Application dependencies and network connection pools successfully established.")
+    logger.info(
+        "Application dependencies and network connection pools successfully established."
+    )
 
     yield
 
@@ -90,7 +92,9 @@ def create_app() -> FastAPI:
     """
     Constructs, configures, and returns a production-grade FastAPI instance.
     """
-    is_debug = getattr(settings.app, "DEBUG", False) or os.getenv("ENVIRONMENT", "").lower() in ("dev", "development")
+    is_debug = getattr(settings.app, "DEBUG", False) or os.getenv(
+        "ENVIRONMENT", ""
+    ).lower() in ("dev", "development")
 
     app = FastAPI(
         title=getattr(settings.app, "PROJECT_NAME", "Cyber Risk Orchestration Engine"),
@@ -133,9 +137,13 @@ def create_app() -> FastAPI:
     try:
         setup_telemetry(app=app, otlp_endpoint=otlp_endpoint)
         if otlp_endpoint:
-            logger.info("OpenTelemetry tracing registered for endpoint: %s", otlp_endpoint)
+            logger.info(
+                "OpenTelemetry tracing registered for endpoint: %s", otlp_endpoint
+            )
         else:
-            logger.info("OpenTelemetry tracing initialized (no OTLP exporter configured)")
+            logger.info(
+                "OpenTelemetry tracing initialized (no OTLP exporter configured)"
+            )
     except Exception as exc:
         logger.warning("Telemetry setup deferred or skipped: %s", exc)
 
@@ -152,7 +160,9 @@ def create_app() -> FastAPI:
             "/metrics",
         ],
     )
-    instrumentator.instrument(app).expose(app, endpoint="/metrics", include_in_schema=False)
+    instrumentator.instrument(app).expose(
+        app, endpoint="/metrics", include_in_schema=False
+    )
 
     @app.get(
         "/health/live",
@@ -189,7 +199,9 @@ def create_app() -> FastAPI:
         }
 
         return JSONResponse(
-            status_code=status.HTTP_200_OK if is_ready else status.HTTP_503_SERVICE_UNAVAILABLE,
+            status_code=status.HTTP_200_OK
+            if is_ready
+            else status.HTTP_503_SERVICE_UNAVAILABLE,
             content=response_payload,
         )
 

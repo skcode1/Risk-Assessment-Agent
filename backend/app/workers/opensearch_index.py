@@ -14,43 +14,43 @@ OPENSEARCH_INDEX_PREFIX = os.getenv("OPENSEARCH_INDEX_PREFIX", "security-events"
 def get_security_events_index_name(date: datetime | None = None) -> str:
     """
     Generate the OpenSearch index name for security events with monthly rollover.
-    
+
     Format: {prefix}-YYYY.MM
     Example: security-events-2026.10
-    
+
     Args:
         date: The date to generate the index name for. Defaults to current UTC time.
-        
+
     Returns:
         The index name string.
     """
     if date is None:
         date = datetime.now(UTC)
-    
+
     # Ensure UTC timezone
     if date.tzinfo is None:
         date = date.replace(tzinfo=UTC)
     else:
         date = date.astimezone(UTC)
-    
+
     return f"{OPENSEARCH_INDEX_PREFIX}-{date.strftime('%Y.%m')}"
 
 
 def get_threat_intel_index_name(date: datetime | None = None) -> str:
     """
     Generate the OpenSearch index name for threat intelligence with monthly rollover.
-    
+
     Format: threat-intel-indicators-YYYY.MM
     Example: threat-intel-indicators-2026.10
     """
     if date is None:
         date = datetime.now(UTC)
-    
+
     if date.tzinfo is None:
         date = date.replace(tzinfo=UTC)
     else:
         date = date.astimezone(UTC)
-    
+
     return f"threat-intel-indicators-{date.strftime('%Y.%m')}"
 
 
@@ -118,11 +118,7 @@ SECURITY_EVENTS_ILM_POLICY: dict[str, Any] = {
             },
             {
                 "name": "cold",
-                "actions": [
-                    {
-                        "readonly": {}
-                    }
-                ],
+                "actions": [{"readonly": {}}],
                 "transitions": [
                     {
                         "state_name": "delete",
@@ -134,11 +130,7 @@ SECURITY_EVENTS_ILM_POLICY: dict[str, Any] = {
             },
             {
                 "name": "delete",
-                "actions": [
-                    {
-                        "delete": {}
-                    }
-                ],
+                "actions": [{"delete": {}}],
             },
         ],
         "ism_template": [
@@ -197,11 +189,7 @@ THREAT_INTEL_ILM_POLICY: dict[str, Any] = {
             },
             {
                 "name": "cold",
-                "actions": [
-                    {
-                        "readonly": {}
-                    }
-                ],
+                "actions": [{"readonly": {}}],
                 "transitions": [
                     {
                         "state_name": "delete",
@@ -213,11 +201,7 @@ THREAT_INTEL_ILM_POLICY: dict[str, Any] = {
             },
             {
                 "name": "delete",
-                "actions": [
-                    {
-                        "delete": {}
-                    }
-                ],
+                "actions": [{"delete": {}}],
             },
         ],
         "ism_template": [
@@ -233,18 +217,21 @@ THREAT_INTEL_ILM_POLICY: dict[str, Any] = {
 async def setup_ilm_policies(opensearch_client) -> bool:
     """
     Set up ILM policies in OpenSearch.
-    
+
     Args:
         opensearch_client: AsyncOpenSearch client instance.
-        
+
     Returns:
         True if successful, False otherwise.
     """
     from opensearchpy.exceptions import OpenSearchException
-    
+
     try:
         # Check if policies already exist
-        for policy_name in [get_ilm_policy_name(), "threat-intel-indicators-ilm-policy"]:
+        for policy_name in [
+            get_ilm_policy_name(),
+            "threat-intel-indicators-ilm-policy",
+        ]:
             try:
                 await opensearch_client.transport.perform_request(
                     "GET", f"/_plugins/_ism/policies/{policy_name}"
@@ -264,7 +251,7 @@ async def setup_ilm_policies(opensearch_client) -> bool:
                         body=THREAT_INTEL_ILM_POLICY,
                     )
                 print(f"Created ILM policy: {policy_name}")
-        
+
         return True
     except Exception as e:
         print(f"Failed to set up ILM policies: {e}")
@@ -274,18 +261,18 @@ async def setup_ilm_policies(opensearch_client) -> bool:
 async def create_initial_indices(opensearch_client) -> bool:
     """
     Create initial indices with proper settings and aliases.
-    
+
     Args:
         opensearch_client: AsyncOpenSearch client instance.
-        
+
     Returns:
         True if successful, False otherwise.
     """
-    
+
     try:
         current_index = get_security_events_index_name()
         alias = get_security_events_alias()
-        
+
         # Check if index already exists
         exists = await opensearch_client.indices.exists(index=current_index)
         if not exists:
@@ -317,20 +304,20 @@ async def create_initial_indices(opensearch_client) -> bool:
                     }
                 },
             }
-            
+
             await opensearch_client.indices.create(
                 index=current_index,
                 body=index_settings,
             )
-            
+
             # Add alias
             await opensearch_client.indices.put_alias(
                 index=current_index,
                 name=alias,
             )
-            
+
             print(f"Created initial index: {current_index} with alias: {alias}")
-        
+
         return True
     except Exception as e:
         print(f"Failed to create initial indices: {e}")

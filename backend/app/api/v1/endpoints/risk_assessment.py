@@ -139,7 +139,9 @@ async def evaluate_risk_assessment(
     summary="Retrieve Risk Assessment by ID",
 )
 async def get_risk_assessment_by_id(
-    assessment_id: Annotated[UUID, Path(description="Primary UUID of the risk assessment record")],
+    assessment_id: Annotated[
+        UUID, Path(description="Primary UUID of the risk assessment record")
+    ],
     db: Annotated[AsyncSession, Depends(get_db_session)],
     claims: Annotated[TokenClaims, Depends(require_scopes("assessments:read"))],
 ) -> AssessmentDetailResponse:
@@ -163,7 +165,9 @@ async def get_risk_assessment_by_id(
     summary="Manual Analyst Score Override",
 )
 async def override_risk_assessment(
-    assessment_id: Annotated[UUID, Path(description="Primary UUID of the risk assessment to override")],
+    assessment_id: Annotated[
+        UUID, Path(description="Primary UUID of the risk assessment to override")
+    ],
     request: AssessmentOverrideRequest,
     db: Annotated[AsyncSession, Depends(get_db_session)],
     claims: Annotated[
@@ -220,11 +224,15 @@ async def override_risk_assessment(
     summary="Trigger Endpoint Containment Action",
 )
 async def trigger_containment_action(
-    assessment_id: Annotated[UUID, Path(description="Primary UUID of the risk assessment")],
+    assessment_id: Annotated[
+        UUID, Path(description="Primary UUID of the risk assessment")
+    ],
     claims: Annotated[
         TokenClaims,
         Depends(require_scopes("assessments:contain")),
-        Depends(require_roles("ROLE_SOC_ANALYST_L2", "ROLE_SOC_LEAD", "ROLE_SECURITY_ADMIN")),
+        Depends(
+            require_roles("ROLE_SOC_ANALYST_L2", "ROLE_SOC_LEAD", "ROLE_SECURITY_ADMIN")
+        ),
     ],
     payload: dict[str, Any] = Body(...),
 ) -> dict[str, Any]:

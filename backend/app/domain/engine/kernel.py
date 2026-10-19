@@ -32,6 +32,7 @@ from app.domain.models.policy import PolicyWeights, RiskPolicy
 @dataclass(frozen=True, slots=True)
 class KernelExecutionAudit:
     """Audit trace capturing raw evaluation steps and precision checkpoints."""
+
     kernel_execution_id: UUID
     policy_id: UUID
     policy_version: str
@@ -44,6 +45,7 @@ class KernelExecutionAudit:
 @dataclass(frozen=True, slots=True)
 class ScoringKernelResult:
     """Authoritative result emitted by the scoring engine prior to pipeline routing."""
+
     risk_score: Decimal
     rating: RiskCategory
     components: RiskComponents
@@ -69,10 +71,10 @@ class DeterministicRiskScoringKernel(RiskScoringEngineInterface):
     """
     Authoritative, non-LLM Deterministic Scoring Kernel.
     Orchestrates B, F, S, H calculators and maps the weighted sum against versioned policies.
-    
+
     Formula:
         Risk = w_b * B + w_f * F + w_s * S + w_h * H
-    
+
     Default spec invariants:
         w_b = 0.40, w_f = 0.30, w_s = 0.20, w_h = 0.10
     """
@@ -86,8 +88,12 @@ class DeterministicRiskScoringKernel(RiskScoringEngineInterface):
         category_resolver: DynamicRiskCategoryResolver | None = None,
     ) -> None:
         self._behavior_calculator = behavior_calculator or DynamicBehaviorCalculator()
-        self._frequency_calculator = frequency_calculator or DynamicFrequencyCalculator()
-        self._sensitivity_calculator = sensitivity_calculator or DynamicSensitivityCalculator()
+        self._frequency_calculator = (
+            frequency_calculator or DynamicFrequencyCalculator()
+        )
+        self._sensitivity_calculator = (
+            sensitivity_calculator or DynamicSensitivityCalculator()
+        )
         self._history_calculator = history_calculator or DynamicHistoryCalculator()
         self._category_resolver = category_resolver or DynamicRiskCategoryResolver()
 
@@ -173,10 +179,14 @@ class DeterministicRiskScoringKernel(RiskScoringEngineInterface):
         term_sensitivity = components.sensitivity * w_s
         term_history = components.history * w_h
 
-        raw_weighted_sum = term_behavior + term_frequency + term_sensitivity + term_history
+        raw_weighted_sum = (
+            term_behavior + term_frequency + term_sensitivity + term_history
+        )
 
         # Quantize to 1 decimal place with round-half-up
-        quantized_score = raw_weighted_sum.quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
+        quantized_score = raw_weighted_sum.quantize(
+            Decimal("0.1"), rounding=ROUND_HALF_UP
+        )
 
         # Bounds safety clamp: [0.0, 100.0]
         bounded_score = max(Decimal("0.0"), min(Decimal("100.0"), quantized_score))
@@ -225,4 +235,6 @@ class DeterministicRiskScoringKernel(RiskScoringEngineInterface):
         try:
             return Decimal(str(val))
         except (InvalidOperation, TypeError, ValueError) as err:
-            raise ValueError(f"Value '{val}' cannot be converted to Decimal: {err}") from err
+            raise ValueError(
+                f"Value '{val}' cannot be converted to Decimal: {err}"
+            ) from err

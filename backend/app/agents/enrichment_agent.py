@@ -1,5 +1,3 @@
-
-
 import logging
 from dataclasses import asdict, dataclass
 from typing import Any
@@ -63,14 +61,14 @@ class TelemetryEnrichmentAgent:
         self.redis = redis_client
         self.opensearch = opensearch_client
 
-    async def build_context_bundle(
-        self, assessment_id: UUID
-    ) -> EnrichedContextBundle:
+    async def build_context_bundle(self, assessment_id: UUID) -> EnrichedContextBundle:
         """
         Gathers immutable assessment state, associated detection signals,
         investigation telemetry, and external indicator context.
         """
-        with tracer.start_as_current_span("enrichment_agent.build_context_bundle") as span:
+        with tracer.start_as_current_span(
+            "enrichment_agent.build_context_bundle"
+        ) as span:
             span.set_attribute("assessment_id", str(assessment_id))
 
             # 1. Fetch Primary Assessment Record
@@ -126,7 +124,9 @@ class TelemetryEnrichmentAgent:
                 },
                 "applied_policy": {
                     "policy_id": str(assessment.policy_id),
-                    "version": assessment.applied_policy_snapshot.get("version", "UNKNOWN"),
+                    "version": assessment.applied_policy_snapshot.get(
+                        "version", "UNKNOWN"
+                    ),
                     "weights": assessment.applied_policy_snapshot.get("weights", {}),
                 },
             }
@@ -138,7 +138,9 @@ class TelemetryEnrichmentAgent:
                 "source_type": detection.source_type.value,
                 "severity": detection.severity.value,
                 "confidence": float(detection.confidence),
-                "fidelity": float(detection.fidelity) if detection.fidelity is not None else None,
+                "fidelity": float(detection.fidelity)
+                if detection.fidelity is not None
+                else None,
                 "hostname": detection.hostname,
                 "destination_ip": detection.destination_ip,
                 "raw_payload": detection.raw_payload,
@@ -146,8 +148,12 @@ class TelemetryEnrichmentAgent:
             }
 
             investigation_data = {
-                "event_frequency": investigation.event_frequency if investigation else 1,
-                "endpoints_touched": investigation.endpoints_touched if investigation else 1,
+                "event_frequency": investigation.event_frequency
+                if investigation
+                else 1,
+                "endpoints_touched": investigation.endpoints_touched
+                if investigation
+                else 1,
                 "dominant_endpoint_class": (
                     investigation.dominant_endpoint_class.value
                     if investigation
@@ -213,7 +219,9 @@ class TelemetryEnrichmentAgent:
                 cache_key = f"ti:{source_ip}"
                 cached = await self.redis.hgetall(cache_key)
                 if cached:
-                    intel_payload["is_known_malicious"] = cached.get("malicious") == "true"
+                    intel_payload["is_known_malicious"] = (
+                        cached.get("malicious") == "true"
+                    )
                     if "tags" in cached:
                         intel_payload["reputation_tags"] = cached["tags"].split(",")
                     intel_payload["autonomous_system"] = cached.get("asn")
@@ -225,12 +233,12 @@ class TelemetryEnrichmentAgent:
         if self.opensearch is not None:
             try:
                 query = {
-                    "query": {
-                        "term": {"indicator.keyword": source_ip}
-                    },
+                    "query": {"term": {"indicator.keyword": source_ip}},
                     "size": 1,
                 }
-                res = await self.opensearch.search(index="threat-intel-indicators*", body=query)
+                res = await self.opensearch.search(
+                    index="threat-intel-indicators*", body=query
+                )
                 hits = res.get("hits", {}).get("hits", [])
                 if hits:
                     source = hits[0].get("_source", {})

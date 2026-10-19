@@ -1,31 +1,43 @@
-"""
-Compatibility shim for app.engine -> app.domain.engine
-Provides backwards compatibility for imports expecting app.engine.* modules.
-"""
-
-from app.domain.engine import calculators, invariants, kernel, resolver
+from app.domain.engine import (
+    calculators as calculators,
+)
+from app.domain.engine import (
+    invariants as invariants,
+)
+from app.domain.engine import (
+    kernel as kernel,
+)
+from app.domain.engine import (
+    resolver as resolver,
+)
+from app.domain.engine.invariants import (
+    InvariantRuleConfig as InvariantRuleConfig,
+)
+from app.domain.engine.invariants import (
+    InvariantViolationError as InvariantViolationError,
+)
+from app.domain.engine.invariants import (
+    ScoringInvariantVerifier as ScoringInvariantVerifier,
+)
+from app.domain.engine.kernel import (
+    DeterministicRiskScoringKernel as DeterministicRiskScoringKernel,
+)
+from app.domain.engine.kernel import (
+    ScoringKernelResult as ScoringKernelResult,
+)
+from app.domain.engine.resolver import (
+    DynamicRiskCategoryResolver as DynamicRiskCategoryResolver,
+)
 
 __all__ = [
-    "calculators",
-    "invariants",
-    "kernel",
-    "resolver",
-]
-
-# Re-export key classes for direct imports
-from app.domain.engine.invariants import (
-    InvariantRuleConfig,
-    InvariantViolationError,
-    ScoringInvariantVerifier,
-)
-from app.domain.engine.kernel import DeterministicRiskScoringKernel, ScoringKernelResult
-from app.domain.engine.resolver import DynamicRiskCategoryResolver
-
-__all__.extend([
     "DeterministicRiskScoringKernel",
     "DynamicRiskCategoryResolver",
     "InvariantRuleConfig",
     "InvariantViolationError",
     "ScoringInvariantVerifier",
     "ScoringKernelResult",
-])
+    "calculators",
+    "invariants",
+    "kernel",
+    "resolver",
+]

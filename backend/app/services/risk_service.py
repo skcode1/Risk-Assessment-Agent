@@ -1,4 +1,3 @@
-
 """
 Orchestration Service for End-to-End Cyber Risk Assessment.
 
@@ -205,9 +204,7 @@ class RiskOrchestrationService:
         """Enrich supplied telemetry with available external history."""
         source_ip = detection.context.source_ip
         current_frequency = investigation.telemetry.event_frequency
-        current_history = (
-            investigation.telemetry.historical_incident_count
-        )
+        current_history = investigation.telemetry.historical_incident_count
 
         if self.redis is not None:
             try:
@@ -215,9 +212,7 @@ class RiskOrchestrationService:
                 window_seconds = getattr(settings.app, "SLIDING_WINDOW_SECONDS", 3600)
                 minimum_timestamp = time.time() - float(window_seconds)
 
-                async with self.redis.pipeline(
-                    transaction=True
-                ) as pipeline:
+                async with self.redis.pipeline(transaction=True) as pipeline:
                     pipeline.zremrangebyscore(
                         redis_key,
                         "-inf",
@@ -263,11 +258,7 @@ class RiskOrchestrationService:
                     "query": {
                         "bool": {
                             "must": [
-                                {
-                                    "term": {
-                                        "source_ip.keyword": source_ip
-                                    }
-                                },
+                                {"term": {"source_ip.keyword": source_ip}},
                                 {
                                     "terms": {
                                         "rating.keyword": [
@@ -316,14 +307,10 @@ class RiskOrchestrationService:
         try:
             parsed = Decimal(str(value))
         except (InvalidOperation, TypeError, ValueError) as exc:
-            raise ValueError(
-                f"Policy field {field_name!r} must be numeric."
-            ) from exc
+            raise ValueError(f"Policy field {field_name!r} must be numeric.") from exc
 
         if not parsed.is_finite():
-            raise ValueError(
-                f"Policy field {field_name!r} must be finite."
-            )
+            raise ValueError(f"Policy field {field_name!r} must be finite.")
 
         return parsed
 
@@ -337,17 +324,13 @@ class RiskOrchestrationService:
         {"tiers": [...]} format into the domain threshold configuration.
         """
         if not isinstance(raw_thresholds, Mapping):
-            raise ValueError(
-                "Policy thresholds_config must be a JSON object."
-            )
+            raise ValueError("Policy thresholds_config must be a JSON object.")
 
         if "tiers" in raw_thresholds:
             raw_tiers = raw_thresholds["tiers"]
 
             if not isinstance(raw_tiers, list):
-                raise ValueError(
-                    "Policy thresholds_config['tiers'] must be a list."
-                )
+                raise ValueError("Policy thresholds_config['tiers'] must be a list.")
 
             tiers = raw_tiers
         else:
@@ -355,9 +338,7 @@ class RiskOrchestrationService:
 
             for category_name, tier_data in raw_thresholds.items():
                 if not isinstance(tier_data, Mapping):
-                    raise ValueError(
-                        "Each category-keyed threshold must be an object."
-                    )
+                    raise ValueError("Each category-keyed threshold must be an object.")
 
                 tiers.append(
                     {
@@ -368,23 +349,18 @@ class RiskOrchestrationService:
 
         if not tiers:
             raise ValueError(
-                "Threshold configuration must define at least one "
-                "category tier."
+                "Threshold configuration must define at least one category tier."
             )
 
         parsed_tiers = []
 
         for tier in tiers:
             if not isinstance(tier, Mapping):
-                raise ValueError(
-                    "Each policy threshold tier must be an object."
-                )
+                raise ValueError("Each policy threshold tier must be an object.")
 
             category_value = tier.get("category")
             if category_value is None:
-                raise ValueError(
-                    "A policy threshold tier is missing its category."
-                )
+                raise ValueError("A policy threshold tier is missing its category.")
 
             try:
                 category = RiskCategory(str(category_value).upper())
@@ -441,34 +417,23 @@ class RiskOrchestrationService:
         statement = select(PolicyModel)
 
         if policy_version:
-            statement = statement.where(
-                PolicyModel.version == policy_version
-            )
+            statement = statement.where(PolicyModel.version == policy_version)
         else:
-            statement = (
-                statement.where(PolicyModel.is_active.is_(True))
-                .order_by(PolicyModel.created_at.desc())
+            statement = statement.where(PolicyModel.is_active.is_(True)).order_by(
+                PolicyModel.created_at.desc()
             )
 
         result = await self.db.execute(statement)
         policy_model = result.scalars().first()
 
         if policy_model is None:
-            raise PolicyNotFoundException(
-                policy_identifier=policy_version or "ACTIVE"
-            )
+            raise PolicyNotFoundException(policy_identifier=policy_version or "ACTIVE")
 
-        thresholds = self._parse_thresholds(
-            policy_model.thresholds_config
-        )
+        thresholds = self._parse_thresholds(policy_model.thresholds_config)
 
-        raw_endpoint_weights = (
-            policy_model.endpoint_class_weights or {}
-        )
+        raw_endpoint_weights = policy_model.endpoint_class_weights or {}
         if not isinstance(raw_endpoint_weights, Mapping):
-            raise ValueError(
-                "Policy endpoint_class_weights must be a JSON object."
-            )
+            raise ValueError("Policy endpoint_class_weights must be a JSON object.")
 
         endpoint_weights = {}
 
@@ -533,8 +498,8 @@ class RiskOrchestrationService:
                 else detection_domain.context.raw_payload
             ),
             context_data={
-               "technique_id": detection_domain.context.technique_id,
-    "username": detection_domain.context.username,
+                "technique_id": detection_domain.context.technique_id,
+                "username": detection_domain.context.username,
             },
         )
 
@@ -551,21 +516,13 @@ class RiskOrchestrationService:
             investigation_id=uuid4(),
             detection_event_id=detection_domain.event_id,
             correlation_id=investigation_domain.correlation_id,
-            event_frequency=(
-                investigation_domain.telemetry.event_frequency
-            ),
-            endpoints_touched=(
-                investigation_domain.telemetry.endpoints_touched
-            ),
-            dominant_endpoint_class=(
-                investigation_domain.telemetry.endpoint_class
-            ),
+            event_frequency=(investigation_domain.telemetry.event_frequency),
+            endpoints_touched=(investigation_domain.telemetry.endpoints_touched),
+            dominant_endpoint_class=(investigation_domain.telemetry.endpoint_class),
             historical_incident_count=(
                 investigation_domain.telemetry.historical_incident_count
             ),
-            severity_hint=(
-                investigation_domain.telemetry.severity_hint
-            ),
+            severity_hint=(investigation_domain.telemetry.severity_hint),
             touched_endpoints_detail=touched_details,
         )
 
@@ -582,9 +539,7 @@ class RiskOrchestrationService:
             sensitivity_score=assessment_domain.components.sensitivity,
             history_score=assessment_domain.components.history,
             components_snapshot=assessment_domain.components.to_dict(),
-            applied_policy_snapshot=(
-                assessment_domain.applied_policy.to_dict()
-            ),
+            applied_policy_snapshot=(assessment_domain.applied_policy.to_dict()),
         )
 
         self.db.add_all(
@@ -614,8 +569,7 @@ class RiskOrchestrationService:
             data = raw_detection.model_dump(mode="json")
         else:
             raise ValueError(
-                "Unsupported detection_event type: "
-                f"{type(raw_detection).__name__}"
+                f"Unsupported detection_event type: {type(raw_detection).__name__}"
             )
 
         metrics_data = data.get("metrics") or {}
@@ -630,9 +584,7 @@ class RiskOrchestrationService:
                 UUID(str(correlation_id)) if correlation_id else uuid4()
             )
         except (TypeError, ValueError) as exc:
-            raise ValueError(
-                f"Invalid detection_event identifier: {exc}"
-            ) from exc
+            raise ValueError(f"Invalid detection_event identifier: {exc}") from exc
 
         metrics = DetectionMetrics(
             confidence=Decimal(str(metrics_data.get("confidence", 90.0))),
@@ -694,12 +646,8 @@ class RiskOrchestrationService:
 
         if is_mapping_shape:
             telemetry = InvestigationTelemetry(
-                event_frequency=int(
-                    telemetry_data.get("event_frequency", 1)
-                ),
-                endpoints_touched=int(
-                    telemetry_data.get("endpoints_touched", 1)
-                ),
+                event_frequency=int(telemetry_data.get("event_frequency", 1)),
+                endpoints_touched=int(telemetry_data.get("endpoints_touched", 1)),
                 endpoint_class=EndpointClass(
                     telemetry_data.get(
                         "endpoint_class",
@@ -731,9 +679,7 @@ class RiskOrchestrationService:
                             "DATABASE_SERVER",
                         )
                     ),
-                    is_compromised=bool(
-                        endpoint.get("is_compromised", True)
-                    ),
+                    is_compromised=bool(endpoint.get("is_compromised", True)),
                 )
                 for endpoint in touched_raw
             ]

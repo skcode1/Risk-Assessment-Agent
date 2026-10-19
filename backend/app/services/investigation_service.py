@@ -1,10 +1,3 @@
-"""
-Security Investigation Orchestration Service.
-Orchestrates automated asset reconnaissance, sliding-window recurrence aggregation,
-OpenSearch historical incident lookups, and endpoint compromise tracking prior to
-deterministic risk scoring kernel evaluation.
-"""
-
 import logging
 import time
 from decimal import ROUND_HALF_UP, Decimal
@@ -15,7 +8,6 @@ import redis.asyncio as aioredis
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-# ✅ REPLACE WITH THIS:
 try:
     from opensearchpy import AsyncOpenSearch
 except ImportError:
@@ -49,8 +41,6 @@ tracer = get_tracer()
 
 
 class InvestigationNotFoundException(BaseAppException):
-    """Raised when an investigation record cannot be located."""
-
     def __init__(self, identifier: str) -> None:
         super().__init__(
             message=f"Investigation telemetry for identifier '{identifier}' was not found.",
@@ -61,11 +51,6 @@ class InvestigationNotFoundException(BaseAppException):
 
 
 class InvestigationOrchestrationService:
-    """
-    Coordinates enrichment of raw detection events with real-time sliding-window telemetry,
-    historical threat recurrence, and network topology forensics.
-    """
-
     def __init__(
         self,
         db_session: AsyncSession,
@@ -83,11 +68,10 @@ class InvestigationOrchestrationService:
         request: InvestigationCreateRequest,
         actor_identifier: str | None = None,
     ) -> InvestigationResponse:
-        """
-        Persists correlated investigation telemetry directly and triggers automated enrichment
-        against Redis sliding-window tallies and historical threat patterns.
-        """
-        with tracer.start_as_current_span("investigation_service.ingest_investigation") as span:
+
+        with tracer.start_as_current_span(
+            "investigation_service.ingest_investigation"
+        ) as span:
             span.set_attribute("correlation_id", str(request.correlation_id))
             span.set_attribute("detection_event_id", str(request.detection_event_id))
 
@@ -108,7 +92,9 @@ class InvestigationOrchestrationService:
 
             enriched_history = request.telemetry.historical_incident_count
             if source_ip:
-                historical_count = await self._query_historical_incident_count(source_ip)
+                historical_count = await self._query_historical_incident_count(
+                    source_ip
+                )
                 enriched_history = max(enriched_history, historical_count)
 
             touched_serialized = [
@@ -158,7 +144,9 @@ class InvestigationOrchestrationService:
         Assembles a fully hydrated, pure domain InvestigationResult for a detection event
         by reconciling provided metrics with Redis and OpenSearch/PostgreSQL telemetry.
         """
-        with tracer.start_as_current_span("investigation_service.build_investigation_domain"):
+        with tracer.start_as_current_span(
+            "investigation_service.build_investigation_domain"
+        ):
             source_ip = detection.context.source_ip
 
             # 1. Resolve event frequency via Redis sliding window
@@ -170,7 +158,9 @@ class InvestigationOrchestrationService:
                 resolved_frequency = base_frequency
 
             # 2. Resolve historical incidents across data tiers
-            base_history = base_telemetry.historical_incident_count if base_telemetry else 0
+            base_history = (
+                base_telemetry.historical_incident_count if base_telemetry else 0
+            )
             retrieved_history = await self._query_historical_incident_count(source_ip)
             resolved_history = max(base_history, retrieved_history)
 
@@ -186,7 +176,9 @@ class InvestigationOrchestrationService:
             # 4. Synthesize final investigation telemetry
             telemetry = InvestigationTelemetry(
                 event_frequency=resolved_frequency,
-                endpoints_touched=len(endpoints) if endpoints else (base_telemetry.endpoints_touched if base_telemetry else 1),
+                endpoints_touched=len(endpoints)
+                if endpoints
+                else (base_telemetry.endpoints_touched if base_telemetry else 1),
                 endpoint_class=dominant_class,
                 historical_incident_count=resolved_history,
                 severity_hint=base_telemetry.severity_hint if base_telemetry else None,
@@ -199,7 +191,9 @@ class InvestigationOrchestrationService:
                 touched_endpoints=endpoints,
             )
 
-    async def get_investigation_by_id(self, investigation_id: UUID) -> InvestigationResponse:
+    async def get_investigation_by_id(
+        self, investigation_id: UUID
+    ) -> InvestigationResponse:
         """Retrieves investigation record by UUID."""
         with tracer.start_as_current_span("investigation_service.get_by_id"):
             stmt = select(InvestigationModel).where(
@@ -217,7 +211,9 @@ class InvestigationOrchestrationService:
         self, correlation_id: UUID
     ) -> InvestigationResponse | None:
         """Retrieves investigation telemetry associated with a correlation identifier."""
-        with tracer.start_as_current_span("investigation_service.get_by_correlation_id"):
+        with tracer.start_as_current_span(
+            "investigation_service.get_by_correlation_id"
+        ):
             stmt = (
                 select(InvestigationModel)
                 .where(InvestigationModel.correlation_id == correlation_id)
@@ -250,7 +246,9 @@ class InvestigationOrchestrationService:
 
             return int(results[1])
         except Exception as exc:
-            logger.warning("Failed to retrieve sliding window counter from Redis: %s", exc)
+            logger.warning(
+                "Failed to retrieve sliding window counter from Redis: %s", exc
+            )
             return 0
 
     async def _query_historical_incident_count(self, source_ip: str) -> int:
@@ -320,7 +318,7 @@ class InvestigationOrchestrationService:
         target_group = compromised if compromised else endpoints
 
         best_class = EndpointClass.WORKSTATION
-        highest_weight = Decimal("-1")
+        highest_weight = Decimal(-1)
 
         for ep in target_group:
             if policy is not None:
@@ -354,7 +352,9 @@ class InvestigationOrchestrationService:
             endpoints_touched=model.endpoints_touched,
             dominant_endpoint_class=model.dominant_endpoint_class,
             historical_incident_count=model.historical_incident_count,
-            severity_hint=float(model.severity_hint) if model.severity_hint is not None else None,
+            severity_hint=float(model.severity_hint)
+            if model.severity_hint is not None
+            else None,
             touched_endpoints_detail=detail_items,
             telemetry_metadata=model.telemetry_metadata,
             investigated_by=model.investigated_by,

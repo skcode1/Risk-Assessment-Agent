@@ -29,6 +29,7 @@ class RiskCategory(StringValuedEnum):
       - HIGH:    65.0  to 84.9
       - CRITICAL: 85.0 to 100.0
     """
+
     LOW = "LOW"
     MEDIUM = "MEDIUM"
     HIGH = "HIGH"
@@ -59,6 +60,7 @@ class RiskCategory(StringValuedEnum):
 @unique
 class DetectionSeverity(StringValuedEnum):
     """Initial reported alert severity from sensors, rules, and telemetry sources."""
+
     INFORMATIONAL = "INFORMATIONAL"
     LOW = "LOW"
     MEDIUM = "MEDIUM"
@@ -69,6 +71,7 @@ class DetectionSeverity(StringValuedEnum):
 @unique
 class DetectionSourceType(StringValuedEnum):
     """Origin telemetry categories feeding the ingestion pipeline."""
+
     EDR = "EDR"
     SIEM = "SIEM"
     IDS_IPS = "IDS_IPS"
@@ -84,6 +87,7 @@ class EndpointClass(StringValuedEnum):
     Sensitivity classification tiers for network assets and endpoints.
     Used by the static sensitivity weighting calculator.
     """
+
     CRITICAL_INFRASTRUCTURE = "CRITICAL_INFRASTRUCTURE"
     DOMAIN_CONTROLLER = "DOMAIN_CONTROLLER"
     DATABASE_SERVER = "DATABASE_SERVER"
@@ -113,6 +117,7 @@ class EndpointClass(StringValuedEnum):
 @unique
 class ComponentDriver(StringValuedEnum):
     """Identifies the dominant sub-score driving the final weighted risk score."""
+
     BEHAVIOR = "BEHAVIOR"
     FREQUENCY = "FREQUENCY"
     SENSITIVITY = "SENSITIVITY"
@@ -122,6 +127,7 @@ class ComponentDriver(StringValuedEnum):
 @unique
 class ExplanationSource(StringValuedEnum):
     """Origin generator of human-readable explainability narratives."""
+
     DETERMINISTIC_TEMPLATE = "DETERMINISTIC_TEMPLATE"
     CONSTRAINED_LLM = "CONSTRAINED_LLM"
     ANALYST_OVERRIDE = "ANALYST_OVERRIDE"
@@ -130,6 +136,7 @@ class ExplanationSource(StringValuedEnum):
 @unique
 class AssessmentStatus(StringValuedEnum):
     """Lifecycle status of a computed risk evaluation record."""
+
     PENDING = "PENDING"
     COMPUTED = "COMPUTED"
     OVERRIDDEN = "OVERRIDDEN"

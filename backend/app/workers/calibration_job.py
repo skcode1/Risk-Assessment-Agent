@@ -35,6 +35,7 @@ logger = logging.getLogger("app.workers.calibration_job")
 @dataclass
 class CalibrationResult:
     """Results of statistical analysis for policy calibration."""
+
     frequency_p90: float
     frequency_p99: float
     history_p90: float
@@ -46,11 +47,11 @@ class CalibrationResult:
 class CalibrationJob:
     """
     Analyzes historical assessment data to propose policy parameter updates.
-    
+
     Computes:
     - p90/p99 of event_frequency -> suggests saturation_count for frequency calculator
     - p90/p99 of historical_incident_count -> suggests incident_ceiling for history calculator
-    
+
     Creates proposal policy with status=PENDING_APPROVAL.
     Never auto-activates - requires human approval.
     """
@@ -70,7 +71,7 @@ class CalibrationJob:
     async def collect_frequency_samples(self, session: AsyncSession) -> list[int]:
         """Collect event_frequency samples from recent assessments."""
         cutoff = datetime.now(UTC) - timedelta(days=self.analysis_window_days)
-        
+
         # Query investigation telemetry for event frequencies
         stmt = text("""
             SELECT event_frequency 
@@ -85,7 +86,7 @@ class CalibrationJob:
     async def collect_history_samples(self, session: AsyncSession) -> list[int]:
         """Collect historical_incident_count samples from recent assessments."""
         cutoff = datetime.now(UTC) - timedelta(days=self.analysis_window_days)
-        
+
         stmt = text("""
             SELECT historical_incident_count 
             FROM investigations 
@@ -95,11 +96,13 @@ class CalibrationJob:
         result = await session.execute(stmt, {"cutoff": cutoff})
         return [row[0] for row in result.fetchall()]
 
-    def calculate_percentiles(self, samples: list[int], percentiles: list[float]) -> dict[float, float]:
+    def calculate_percentiles(
+        self, samples: list[int], percentiles: list[float]
+    ) -> dict[float, float]:
         """Calculate percentiles from samples."""
         if not samples or len(samples) < self.min_sample_size:
             return {p: 0.0 for p in percentiles}
-        
+
         sorted_samples = sorted(samples)
         results = {}
         for p in percentiles:
@@ -108,11 +111,13 @@ class CalibrationJob:
             results[p] = float(sorted_samples[idx])
         return results
 
-    def compute_calibration(self, freq_samples: list[int], hist_samples: list[int]) -> CalibrationResult:
+    def compute_calibration(
+        self, freq_samples: list[int], hist_samples: list[int]
+    ) -> CalibrationResult:
         """Compute calibration parameters from samples."""
         freq_percentiles = self.calculate_percentiles(freq_samples, [90.0, 99.0])
         hist_percentiles = self.calculate_percentiles(hist_samples, [90.0, 99.0])
-        
+
         return CalibrationResult(
             frequency_p90=freq_percentiles.get(90.0, 0.0),
             frequency_p99=freq_percentiles.get(99.0, 0.0),
@@ -122,10 +127,12 @@ class CalibrationJob:
             analysis_window_days=self.analysis_window_days,
         )
 
-    def create_proposal_policy(self, current_policy: RiskPolicy, calibration: CalibrationResult) -> RiskPolicy:
+    def create_proposal_policy(
+        self, current_policy: RiskPolicy, calibration: CalibrationResult
+    ) -> RiskPolicy:
         """
         Create a new policy proposal based on calibration results.
-        
+
         Adjusts:
         - frequency_config.saturation_count: set to frequency_p99 (cap at p99)
         - history_config.incident_saturation_ceiling: set to history_p99
@@ -135,15 +142,15 @@ class CalibrationJob:
         hist_config = current_policy.metadata.get("history_config", {})
         sens_config = current_policy.metadata.get("sensitivity_config", {})
         beh_config = current_policy.metadata.get("behavior_config", {})
-        
+
         # Update saturation_count based on frequency p99
         new_saturation = max(10, int(calibration.frequency_p99))
         freq_config["saturation_count"] = new_saturation
-        
+
         # Update incident ceiling based on history p99
         new_ceiling = max(1, int(calibration.history_p99))
         hist_config["incident_saturation_ceiling"] = new_ceiling
-        
+
         # Create new metadata with updated configs
         new_metadata = {
             **current_policy.metadata,
@@ -160,24 +167,27 @@ class CalibrationJob:
                 "history_p99": calibration.history_p99,
                 "proposed_at": datetime.now(UTC).isoformat(),
                 "previous_frequency_saturation": freq_config.get("saturation_count"),
-                "previous_history_ceiling": hist_config.get("incident_saturation_ceiling"),
+                "previous_history_ceiling": hist_config.get(
+                    "incident_saturation_ceiling"
+                ),
                 "new_frequency_saturation": new_saturation,
                 "new_history_ceiling": new_ceiling,
-            }
+            },
         }
-        
+
         # Generate new version string
         from uuid import uuid4
+
         version_suffix = uuid4().hex[:8]
         new_version = f"{current_policy.version}-calibration-{version_suffix}"
-        
+
         return RiskPolicy(
             name=f"Calibration Proposal - {new_version}",
             version=new_version,
             description=f"Auto-generated calibration proposal based on {self.analysis_window_days}d analysis "
-                       f"(n={calibration.sample_size}). "
-                       f"Freq p99={calibration.frequency_p99:.1f} -> saturation_count={new_saturation}, "
-                       f"Hist p99={calibration.history_p99:.1f} -> ceiling={new_ceiling}",
+            f"(n={calibration.sample_size}). "
+            f"Freq p99={calibration.frequency_p99:.1f} -> saturation_count={new_saturation}, "
+            f"Hist p99={calibration.history_p99:.1f} -> ceiling={new_ceiling}",
             weights=current_policy.weights,
             thresholds=current_policy.thresholds,
             endpoint_class_weights=current_policy.endpoint_class_weights,
@@ -189,17 +199,21 @@ class CalibrationJob:
         """Persist proposal policy to database with PENDING_APPROVAL status."""
         # Store in metadata that this is a pending proposal
         proposal.metadata["proposal_status"] = "PENDING_APPROVAL"
-        
+
         async with self.db_factory() as session:
             async with session.begin():
                 # Check if version already exists
                 existing = await session.execute(
-                    select(PolicyModel.policy_id).where(PolicyModel.version == proposal.version)
+                    select(PolicyModel.policy_id).where(
+                        PolicyModel.version == proposal.version
+                    )
                 )
                 if existing.scalar_one_or_none():
-                    logger.warning("Proposal version %s already exists, skipping", proposal.version)
+                    logger.warning(
+                        "Proposal version %s already exists, skipping", proposal.version
+                    )
                     return False
-                
+
                 # Create policy model
                 policy_model = PolicyModel(
                     policy_id=proposal.policy_id,
@@ -213,36 +227,46 @@ class CalibrationJob:
                     weight_history=proposal.weights.history,
                     thresholds_config=proposal.thresholds.to_dict(),
                     endpoint_class_weights={
-                        ep.value: float(wt) for ep, wt in proposal.endpoint_class_weights.items()
+                        ep.value: float(wt)
+                        for ep, wt in proposal.endpoint_class_weights.items()
                     },
                     metadata_info=proposal.metadata,
                     created_by="system:calibration-job",
                     created_at=proposal.created_at,
                     updated_at=proposal.updated_at,
                 )
-                
+
                 session.add(policy_model)
                 await session.flush()
-                
-                logger.info("Created calibration proposal policy: %s (id=%s)", 
-                           proposal.version, proposal.policy_id)
+
+                logger.info(
+                    "Created calibration proposal policy: %s (id=%s)",
+                    proposal.version,
+                    proposal.policy_id,
+                )
                 return True
 
     async def run(self) -> bool:
         """Execute the full calibration job."""
         logger.info("Starting calibration job (window=%dd)", self.analysis_window_days)
-        
+
         try:
             async with self.db_factory() as session:
                 # Get current active policy
-                stmt = select(PolicyModel).where(PolicyModel.is_active.is_(True)).order_by(PolicyModel.created_at.desc())
+                stmt = (
+                    select(PolicyModel)
+                    .where(PolicyModel.is_active.is_(True))
+                    .order_by(PolicyModel.created_at.desc())
+                )
                 result = await session.execute(stmt)
                 active_model = result.scalars().first()
-                
+
                 if not active_model:
-                    logger.error("No active policy found, cannot create calibration proposal")
+                    logger.error(
+                        "No active policy found, cannot create calibration proposal"
+                    )
                     return False
-                
+
                 # Convert to domain policy
                 current_policy = RiskPolicy(
                     policy_id=active_model.policy_id,
@@ -254,48 +278,66 @@ class CalibrationJob:
                         sensitivity=active_model.weight_sensitivity,
                         history=active_model.weight_history,
                     ),
-                    thresholds=ThresholdConfig.from_dict(active_model.thresholds_config),
+                    thresholds=ThresholdConfig.from_dict(
+                        active_model.thresholds_config
+                    ),
                     endpoint_class_weights={
-                        EndpointClass(ep): Decimal(str(wt)) 
-                        for ep, wt in (active_model.endpoint_class_weights or {}).items()
+                        EndpointClass(ep): Decimal(str(wt))
+                        for ep, wt in (
+                            active_model.endpoint_class_weights or {}
+                        ).items()
                     },
                     metadata=active_model.metadata_info or {},
                     is_active=active_model.is_active,
                     created_at=active_model.created_at,
                     updated_at=active_model.updated_at,
                 )
-            
+
             # Collect samples
             freq_samples = await self.collect_frequency_samples(session)
             hist_samples = await self.collect_history_samples(session)
-            
-            logger.info("Collected %d frequency samples, %d history samples", 
-                       len(freq_samples), len(hist_samples))
-            
-            if len(freq_samples) < self.min_sample_size or len(hist_samples) < self.min_sample_size:
-                logger.warning("Insufficient samples for calibration (need %d, got freq=%d, hist=%d)",
-                              self.min_sample_size, len(freq_samples), len(hist_samples))
+
+            logger.info(
+                "Collected %d frequency samples, %d history samples",
+                len(freq_samples),
+                len(hist_samples),
+            )
+
+            if (
+                len(freq_samples) < self.min_sample_size
+                or len(hist_samples) < self.min_sample_size
+            ):
+                logger.warning(
+                    "Insufficient samples for calibration (need %d, got freq=%d, hist=%d)",
+                    self.min_sample_size,
+                    len(freq_samples),
+                    len(hist_samples),
+                )
                 return False
-            
+
             # Compute calibration
             calibration = self.compute_calibration(freq_samples, hist_samples)
-            logger.info("Calibration results: freq_p90=%.1f, freq_p99=%.1f, hist_p90=%.1f, hist_p99=%.1f",
-                       calibration.frequency_p90, calibration.frequency_p99,
-                       calibration.history_p90, calibration.history_p99)
-            
+            logger.info(
+                "Calibration results: freq_p90=%.1f, freq_p99=%.1f, hist_p90=%.1f, hist_p99=%.1f",
+                calibration.frequency_p90,
+                calibration.frequency_p99,
+                calibration.history_p90,
+                calibration.history_p99,
+            )
+
             # Create proposal
             proposal = self.create_proposal_policy(current_policy, calibration)
-            
+
             # Persist proposal
             success = await self.persist_proposal(proposal)
-            
+
             if success:
                 logger.info("Calibration proposal created: %s", proposal.version)
             else:
                 logger.warning("Failed to create calibration proposal")
-            
+
             return success
-            
+
         except Exception:
             logger.exception("Calibration job failed")
             return False
@@ -307,7 +349,7 @@ async def main() -> None:
     db_url = settings.db.ASYNC_DATABASE_URI
     engine = create_async_engine(db_url, pool_pre_ping=True)
     session_factory = async_sessionmaker(bind=engine, expire_on_commit=False)
-    
+
     # Redis client (optional)
     redis_client = None
     redis_url = os.getenv("REDIS_URL")
@@ -317,14 +359,14 @@ async def main() -> None:
             await redis_client.ping()
         except Exception:
             redis_client = None
-    
+
     job = CalibrationJob(
         db_session_factory=session_factory,
         redis_client=redis_client,
         analysis_window_days=int(os.getenv("CALIBRATION_WINDOW_DAYS", "30")),
         min_sample_size=int(os.getenv("CALIBRATION_MIN_SAMPLES", "100")),
     )
-    
+
     try:
         await job.run()
     finally:

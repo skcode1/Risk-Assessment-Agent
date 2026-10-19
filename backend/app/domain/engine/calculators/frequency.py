@@ -36,6 +36,7 @@ class LogarithmicCurveConfig:
         Score = scale_factor * ln(1 + k * event_frequency)
     Bounded strictly between [0.0, max_score].
     """
+
     saturation_count: int = 50
     curvature_constant: float = 1.0
     min_score: Decimal = Decimal("0.0")
@@ -43,9 +44,13 @@ class LogarithmicCurveConfig:
 
     def __post_init__(self) -> None:
         if self.saturation_count <= 0:
-            raise ValueError(f"saturation_count must be positive, got {self.saturation_count}")
+            raise ValueError(
+                f"saturation_count must be positive, got {self.saturation_count}"
+            )
         if self.curvature_constant <= 0.0:
-            raise ValueError(f"curvature_constant must be positive, got {self.curvature_constant}")
+            raise ValueError(
+                f"curvature_constant must be positive, got {self.curvature_constant}"
+            )
         if self.min_score < Decimal("0.0") or self.max_score > Decimal("100.0"):
             raise ValueError("Scores must be bounded within [0.0, 100.0]")
         if self.min_score >= self.max_score:
@@ -58,13 +63,16 @@ class LinearCappedCurveConfig:
     Configuration parameters for linear saturation scaling:
         Score = min(max_score, (event_frequency / cap_threshold) * max_score)
     """
+
     cap_threshold: int = 20
     min_score: Decimal = Decimal("0.0")
     max_score: Decimal = Decimal("100.0")
 
     def __post_init__(self) -> None:
         if self.cap_threshold <= 0:
-            raise ValueError(f"cap_threshold must be positive, got {self.cap_threshold}")
+            raise ValueError(
+                f"cap_threshold must be positive, got {self.cap_threshold}"
+            )
         if self.min_score < Decimal("0.0") or self.max_score > Decimal("100.0"):
             raise ValueError("Scores must be bounded within [0.0, 100.0]")
         if self.min_score >= self.max_score:
@@ -149,7 +157,9 @@ class DynamicFrequencyCalculator(FrequencyMappingStrategy):
         except (InvalidOperation, TypeError, ValueError):
             decimal_score = Decimal(f"{raw_score:.4f}")
 
-        return self._clamp_and_quantize(decimal_score, config.min_score, config.max_score)
+        return self._clamp_and_quantize(
+            decimal_score, config.min_score, config.max_score
+        )
 
     def _calculate_linear(
         self,
@@ -208,13 +218,30 @@ class DynamicFrequencyCalculator(FrequencyMappingStrategy):
         try:
             return LogarithmicCurveConfig(
                 saturation_count=int(
-                    merged_params.get("saturation_count", self._default_log_config.saturation_count)
+                    merged_params.get(
+                        "saturation_count", self._default_log_config.saturation_count
+                    )
                 ),
                 curvature_constant=float(
-                    merged_params.get("curvature_constant", self._default_log_config.curvature_constant)
+                    merged_params.get(
+                        "curvature_constant",
+                        self._default_log_config.curvature_constant,
+                    )
                 ),
-                min_score=Decimal(str(merged_params.get("min_score", self._default_log_config.min_score))),
-                max_score=Decimal(str(merged_params.get("max_score", self._default_log_config.max_score))),
+                min_score=Decimal(
+                    str(
+                        merged_params.get(
+                            "min_score", self._default_log_config.min_score
+                        )
+                    )
+                ),
+                max_score=Decimal(
+                    str(
+                        merged_params.get(
+                            "max_score", self._default_log_config.max_score
+                        )
+                    )
+                ),
             )
         except (InvalidOperation, TypeError, ValueError):
             return self._default_log_config
@@ -241,10 +268,24 @@ class DynamicFrequencyCalculator(FrequencyMappingStrategy):
         try:
             return LinearCappedCurveConfig(
                 cap_threshold=int(
-                    merged_params.get("cap_threshold", self._default_linear_config.cap_threshold)
+                    merged_params.get(
+                        "cap_threshold", self._default_linear_config.cap_threshold
+                    )
                 ),
-                min_score=Decimal(str(merged_params.get("min_score", self._default_linear_config.min_score))),
-                max_score=Decimal(str(merged_params.get("max_score", self._default_linear_config.max_score))),
+                min_score=Decimal(
+                    str(
+                        merged_params.get(
+                            "min_score", self._default_linear_config.min_score
+                        )
+                    )
+                ),
+                max_score=Decimal(
+                    str(
+                        merged_params.get(
+                            "max_score", self._default_linear_config.max_score
+                        )
+                    )
+                ),
             )
         except (InvalidOperation, TypeError, ValueError):
             return self._default_linear_config

@@ -5,10 +5,9 @@ and sliding-window counter updates, and GET /api/v1/detections/{event_id}
 for event context lookups with strict RBAC scopes and OpenTelemetry tracing.
 """
 
+import asyncio
 from typing import Annotated
 from uuid import UUID, uuid4
-
-import asyncio
 
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy import select
@@ -64,7 +63,9 @@ async def ingest_detection_event(
     and publishes the event to Kafka for asynchronous sliding-window counter
     updates performed by the detection consumer worker.
     """
-    with tracer.start_as_current_span("api.v1.endpoints.ingest_detection_event") as span:
+    with tracer.start_as_current_span(
+        "api.v1.endpoints.ingest_detection_event"
+    ) as span:
         span.set_attribute("actor_sub", claims.sub)
         span.set_attribute("correlation_id", str(request.correlation_id))
         span.set_attribute("source_ip", request.context.source_ip)
@@ -145,9 +146,15 @@ async def get_detection_by_id(
 async def list_detections(
     db: Annotated[AsyncSession, Depends(get_db_session)],
     claims: Annotated[TokenClaims, Depends(require_scopes("detections:read"))],
-    source_ip: str | None = Query(default=None, description="Filter by source IP address"),
-    correlation_id: UUID | None = Query(default=None, description="Filter by correlation ID"),
-    severity: DetectionSeverity | None = Query(default=None, description="Filter by detection severity"),
+    source_ip: str | None = Query(
+        default=None, description="Filter by source IP address"
+    ),
+    correlation_id: UUID | None = Query(
+        default=None, description="Filter by correlation ID"
+    ),
+    severity: DetectionSeverity | None = Query(
+        default=None, description="Filter by detection severity"
+    ),
     limit: int = Query(default=50, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
 ) -> list[DetectionResponse]:
@@ -164,7 +171,9 @@ async def list_detections(
         if severity is not None:
             stmt = stmt.where(DetectionModel.severity == severity)
 
-        stmt = stmt.order_by(DetectionModel.detected_at.desc()).limit(limit).offset(offset)
+        stmt = (
+            stmt.order_by(DetectionModel.detected_at.desc()).limit(limit).offset(offset)
+        )
         result = await db.execute(stmt)
         records = result.scalars().all()
 

@@ -36,6 +36,7 @@ class HistoryScaleConfig:
     Configuration parameters governing the historical incident count normalization.
     Eliminates hardcoded multipliers and supports dynamic curves and scaling ceilings.
     """
+
     incident_saturation_ceiling: int = 5
     scaling_curve: str = "linear"  # "linear", "logarithmic", "exponential"
     min_score: Decimal = Decimal("0.0")
@@ -52,7 +53,9 @@ class HistoryScaleConfig:
         if self.min_score >= self.max_score:
             raise ValueError("min_score must be strictly less than max_score.")
         if self.exponential_rate <= 0.0:
-            raise ValueError(f"exponential_rate must be positive, got {self.exponential_rate}")
+            raise ValueError(
+                f"exponential_rate must be positive, got {self.exponential_rate}"
+            )
 
 
 class DynamicHistoryCalculator(HistoryMappingStrategy):
@@ -197,8 +200,12 @@ class DynamicHistoryCalculator(HistoryMappingStrategy):
                 scaling_curve=str(
                     merged_params.get("scaling_curve", self._config.scaling_curve)
                 ),
-                min_score=Decimal(str(merged_params.get("min_score", self._config.min_score))),
-                max_score=Decimal(str(merged_params.get("max_score", self._config.max_score))),
+                min_score=Decimal(
+                    str(merged_params.get("min_score", self._config.min_score))
+                ),
+                max_score=Decimal(
+                    str(merged_params.get("max_score", self._config.max_score))
+                ),
                 exponential_rate=float(
                     merged_params.get("exponential_rate", self._config.exponential_rate)
                 ),

@@ -153,6 +153,12 @@ class InvestigationModel(Base):
             "severity_hint IS NULL OR (severity_hint >= 0.0 AND severity_hint <= 100.0)",
             name="ck_investigations_severity_hint_bounds",
         ),
-        Index("ix_investigations_correlation_created_at", "correlation_id", "created_at"),
-        Index("ix_investigations_endpoint_class_frequency", "dominant_endpoint_class", "event_frequency"),
+        Index(
+            "ix_investigations_correlation_created_at", "correlation_id", "created_at"
+        ),
+        Index(
+            "ix_investigations_endpoint_class_frequency",
+            "dominant_endpoint_class",
+            "event_frequency",
+        ),
     )

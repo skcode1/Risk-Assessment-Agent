@@ -1,4 +1,3 @@
-
 import logging
 from collections.abc import Mapping
 from typing import Any
@@ -36,7 +35,8 @@ def build_resource(
     """
     attrs: dict[str, Any] = {
         ResourceAttributes.SERVICE_NAME: service_name or settings.app.PROJECT_NAME,
-        ResourceAttributes.DEPLOYMENT_ENVIRONMENT: environment or settings.app.ENVIRONMENT,
+        ResourceAttributes.DEPLOYMENT_ENVIRONMENT: environment
+        or settings.app.ENVIRONMENT,
     }
     if extra_attributes:
         attrs.update(dict(extra_attributes))

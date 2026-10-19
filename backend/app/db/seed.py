@@ -126,7 +126,8 @@ def _build_row_payload(table: Table, domain_policy: RiskPolicy) -> dict[str, Any
     # 6. Optional JSONB extensions & audit fields
     if "endpoint_class_weights" in cols:
         payload["endpoint_class_weights"] = {
-            ep.value: float(wt) for ep, wt in domain_policy.endpoint_class_weights.items()
+            ep.value: float(wt)
+            for ep, wt in domain_policy.endpoint_class_weights.items()
         }
 
     for meta_col in ("metadata_info", "metadata", "policy_metadata", "extra_metadata"):
@@ -196,10 +197,14 @@ async def main() -> None:
     try:
         await seed_baseline_policy()
     except SQLAlchemyError as db_err:
-        logger.critical("Database error during policy seeding: %s", db_err, exc_info=True)
+        logger.critical(
+            "Database error during policy seeding: %s", db_err, exc_info=True
+        )
         sys.exit(1)
     except Exception as exc:
-        logger.critical("Unexpected failure during policy seeding: %s", exc, exc_info=True)
+        logger.critical(
+            "Unexpected failure during policy seeding: %s", exc, exc_info=True
+        )
         sys.exit(1)
     finally:
         await close_db_engine()

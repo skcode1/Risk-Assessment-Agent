@@ -1,4 +1,3 @@
-
 import os
 from functools import lru_cache
 from pathlib import Path
@@ -114,9 +113,13 @@ class DatabaseSettings(BaseSettings):
             return self._ASYNC_URI_OVERRIDE
         if self.DATABASE_URL:
             if self.DATABASE_URL.startswith("postgresql+psycopg2://"):
-                return self.DATABASE_URL.replace("postgresql+psycopg2://", "postgresql+asyncpg://", 1)
+                return self.DATABASE_URL.replace(
+                    "postgresql+psycopg2://", "postgresql+asyncpg://", 1
+                )
             if self.DATABASE_URL.startswith("postgresql://"):
-                return self.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
+                return self.DATABASE_URL.replace(
+                    "postgresql://", "postgresql+asyncpg://", 1
+                )
             return self.DATABASE_URL
 
         raw_pwd = (
@@ -188,14 +191,25 @@ class SecuritySettings(BaseSettings):
     JWT_SECRET_KEY: SecretStr = Field(..., min_length=32)
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=15, ge=5, le=1440)
-    
+
     # RS256 / JWKS settings (optional, for production)
-    JWT_PRIVATE_KEY: SecretStr | None = Field(default=None, description="PEM-encoded RSA private key for RS256 signing")
-    JWT_PUBLIC_KEY: SecretStr | None = Field(default=None, description="PEM-encoded RSA public key for RS256 validation (alternative to JWKS)")
-    JWT_JWKS_URL: str | None = Field(default=None, description="JWKS endpoint URL for RS256 key rotation")
-    JWT_ISSUER: str | None = Field(default=None, description="Expected JWT issuer claim")
-    JWT_AUDIENCE: str | None = Field(default=None, description="Expected JWT audience claim")
-    
+    JWT_PRIVATE_KEY: SecretStr | None = Field(
+        default=None, description="PEM-encoded RSA private key for RS256 signing"
+    )
+    JWT_PUBLIC_KEY: SecretStr | None = Field(
+        default=None,
+        description="PEM-encoded RSA public key for RS256 validation (alternative to JWKS)",
+    )
+    JWT_JWKS_URL: str | None = Field(
+        default=None, description="JWKS endpoint URL for RS256 key rotation"
+    )
+    JWT_ISSUER: str | None = Field(
+        default=None, description="Expected JWT issuer claim"
+    )
+    JWT_AUDIENCE: str | None = Field(
+        default=None, description="Expected JWT audience claim"
+    )
+
     # Refresh token settings
     REFRESH_TOKEN_EXPIRE_DAYS: int = Field(default=7, ge=1, le=90)
 

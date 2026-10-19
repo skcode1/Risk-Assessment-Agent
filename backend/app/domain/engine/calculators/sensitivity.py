@@ -36,6 +36,7 @@ class SensitivityAggregationConfig:
     Configuration parameters governing asset sensitivity aggregation and multi-node amplification.
     Eliminates hardcoded multiplier assumptions and supports dynamic policy injection.
     """
+
     apply_lateral_spread_boost: bool = True
     lateral_boost_per_endpoint: Decimal = Decimal("2.5")
     lateral_boost_cap: Decimal = Decimal("15.0")
@@ -104,7 +105,9 @@ class DynamicSensitivityCalculator(SensitivityMappingStrategy):
                 config=config,
             )
 
-        return self._clamp_and_quantize(adjusted_score, config.min_score, config.max_score)
+        return self._clamp_and_quantize(
+            adjusted_score, config.min_score, config.max_score
+        )
 
     def _calculate_from_dominant_class(
         self,
@@ -183,18 +186,24 @@ class DynamicSensitivityCalculator(SensitivityMappingStrategy):
             return SensitivityAggregationConfig(
                 apply_lateral_spread_boost=bool(
                     parameters.get(
-                        "apply_lateral_spread_boost", self._config.apply_lateral_spread_boost
+                        "apply_lateral_spread_boost",
+                        self._config.apply_lateral_spread_boost,
                     )
                 ),
                 lateral_boost_per_endpoint=Decimal(
                     str(
                         parameters.get(
-                            "lateral_boost_per_endpoint", self._config.lateral_boost_per_endpoint
+                            "lateral_boost_per_endpoint",
+                            self._config.lateral_boost_per_endpoint,
                         )
                     )
                 ),
                 lateral_boost_cap=Decimal(
-                    str(parameters.get("lateral_boost_cap", self._config.lateral_boost_cap))
+                    str(
+                        parameters.get(
+                            "lateral_boost_cap", self._config.lateral_boost_cap
+                        )
+                    )
                 ),
                 compromise_multiplier=Decimal(
                     str(
@@ -203,8 +212,12 @@ class DynamicSensitivityCalculator(SensitivityMappingStrategy):
                         )
                     )
                 ),
-                min_score=Decimal(str(parameters.get("min_score", self._config.min_score))),
-                max_score=Decimal(str(parameters.get("max_score", self._config.max_score))),
+                min_score=Decimal(
+                    str(parameters.get("min_score", self._config.min_score))
+                ),
+                max_score=Decimal(
+                    str(parameters.get("max_score", self._config.max_score))
+                ),
             )
         except (InvalidOperation, TypeError, ValueError):
             return self._config

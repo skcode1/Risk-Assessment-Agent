@@ -18,6 +18,7 @@ from pydantic import (
 
 class DetectionBase(BaseModel):
     """Core common attributes representing a normalized detection event."""
+
     model_config = ConfigDict(str_strip_whitespace=True)
 
     source_ip: Annotated[
@@ -64,6 +65,7 @@ class DetectionCreateRequest(DetectionBase):
     Ingest payload contract consumed by POST /api/v1/detections.
     Accepts optional caller-defined IDs with robust UTC timestamp defaults.
     """
+
     model_config = ConfigDict(
         extra="ignore",
         str_strip_whitespace=True,
@@ -106,6 +108,7 @@ class DetectionCreateRequest(DetectionBase):
 
 class DetectionResponse(DetectionBase):
     """Standard persisted detection entity returned in summary views and list payloads."""
+
     model_config = ConfigDict(from_attributes=True)
 
     detection_id: Annotated[
@@ -130,6 +133,7 @@ class DetectionDetailResponse(DetectionResponse):
     Expanded audit and diagnostic payload returned by GET /api/v1/detections/{id}.
     Enriches basic event telemetry with investigation linkages, triage status, and tags.
     """
+
     model_config = ConfigDict(from_attributes=True)
 
     investigation_id: Annotated[
@@ -179,11 +183,14 @@ class DetectionDetailResponse(DetectionResponse):
 
 class DetectionListResponse(BaseModel):
     """Paginated collection response wrapper for detection events."""
+
     model_config = ConfigDict(from_attributes=True)
 
     items: Annotated[
         list[DetectionResponse],
-        Field(..., description="Array of detection records matching the query parameters."),
+        Field(
+            ..., description="Array of detection records matching the query parameters."
+        ),
     ]
     total: Annotated[
         int,
@@ -201,17 +208,26 @@ class DetectionListResponse(BaseModel):
 
 class DetectionFilterParams(BaseModel):
     """Query parameter validation model for detection searches."""
+
     model_config = ConfigDict(extra="forbid")
 
-    source_ip: str | None = Field(default=None, description="Filter by exact source IP address.")
-    event_type: str | None = Field(default=None, description="Filter by alert signature or event category.")
+    source_ip: str | None = Field(
+        default=None, description="Filter by exact source IP address."
+    )
+    event_type: str | None = Field(
+        default=None, description="Filter by alert signature or event category."
+    )
     min_confidence: float | None = Field(
         default=None,
         ge=0.0,
         le=1.0,
         description="Filter by minimum detection confidence threshold.",
     )
-    start_time: datetime | None = Field(default=None, description="Inclusive starting UTC timestamp.")
-    end_time: datetime | None = Field(default=None, description="Inclusive ending UTC timestamp.")
+    start_time: datetime | None = Field(
+        default=None, description="Inclusive starting UTC timestamp."
+    )
+    end_time: datetime | None = Field(
+        default=None, description="Inclusive ending UTC timestamp."
+    )
     limit: int = Field(default=50, ge=1, le=500, description="Maximum items to return.")
     offset: int = Field(default=0, ge=0, description="Offset index for pagination.")

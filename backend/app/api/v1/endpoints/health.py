@@ -1,14 +1,18 @@
-"""
-System Health and Readiness Diagnostic Endpoints.
-Provides non-blocking Kubernetes liveness probes, deep dependency readiness checks
-(PostgreSQL connection pooling, Redis ping, OpenSearch cluster state), and telemetry status.
-"""
-
 import time
 from typing import Any
 
 from fastapi import APIRouter, Response, status
-from opensearchpy import AsyncOpenSearch
+
+# from opensearchpy import AsyncOpenSearch
+
+try:
+    from opensearchpy import AsyncOpenSearch
+except ImportError:
+    try:
+        from opensearchpy._async import AsyncOpenSearch
+    except ImportError:
+        AsyncOpenSearch = None
+
 
 from app.core.config import settings
 from app.core.database import verify_database_connection
@@ -26,13 +30,12 @@ tracer = get_tracer()
     description="Shallow probe verifying that the application event loop is operational.",
 )
 async def liveness_probe() -> dict[str, Any]:
-    """
-    Returns immediate HTTP 200 indicating the ASGI worker process is alive.
-    Excludes external dependency calls to prevent cascading restarts.
-    """
+
     return {
         "status": "UP",
-        "service": getattr(settings.app, "PROJECT_NAME", "Cyber Risk Orchestration Engine"),
+        "service": getattr(
+            settings.app, "PROJECT_NAME", "Cyber Risk Orchestration Engine"
+        ),
         "environment": getattr(settings.app, "ENVIRONMENT", "production"),
         "timestamp": time.time(),
     }
@@ -45,13 +48,7 @@ async def liveness_probe() -> dict[str, Any]:
     description="Deep diagnostic probe verifying reachability of PostgreSQL, Redis, and OpenSearch.",
 )
 async def readiness_probe(response: Response) -> dict[str, Any]:
-    """
-    Validates essential backend infrastructure:
-      - PostgreSQL connection pool acquisition and query execution (`SELECT 1`)
-      - Redis connection and PING response
-      - OpenSearch ping and cluster health (if configured)
-    Returns HTTP 503 Service Unavailable if any mandatory data store is unreachable.
-    """
+
     with tracer.start_as_current_span("health.readiness_probe") as span:
         dependencies: dict[str, dict[str, Any]] = {}
         is_ready = True
@@ -95,21 +92,35 @@ async def readiness_probe(response: Response) -> dict[str, Any]:
             is_ready = False
 
         # 3. OpenSearch Health Check (Optional/Non-blocking check if configured)
-        os_host = getattr(settings.opensearch, "OPENSEARCH_HOST", None) if hasattr(settings, "opensearch") else None
-        if os_host:
+        os_host = (
+            getattr(settings.opensearch, "OPENSEARCH_HOST", None)
+            if hasattr(settings, "opensearch")
+            else None
+        )
+        if os_host and AsyncOpenSearch is not None:
             os_start = time.perf_counter()
             os_healthy = False
             os_error = None
             try:
                 opensearch_client = AsyncOpenSearch(
-                    hosts=[{"host": settings.opensearch.OPENSEARCH_HOST, "port": settings.opensearch.OPENSEARCH_PORT}],
+                    hosts=[
+                        {
+                            "host": settings.opensearch.OPENSEARCH_HOST,
+                            "port": settings.opensearch.OPENSEARCH_PORT,
+                        }
+                    ],
                     http_auth=(
-                        (settings.opensearch.OPENSEARCH_USER, settings.opensearch.OPENSEARCH_PASSWORD.get_secret_value())
+                        (
+                            settings.opensearch.OPENSEARCH_USER,
+                            settings.opensearch.OPENSEARCH_PASSWORD.get_secret_value(),
+                        )
                         if getattr(settings.opensearch, "OPENSEARCH_USER", None)
                         else None
                     ),
                     use_ssl=getattr(settings.opensearch, "OPENSEARCH_USE_SSL", False),
-                    verify_certs=getattr(settings.opensearch, "OPENSEARCH_VERIFY_CERTS", False),
+                    verify_certs=getattr(
+                        settings.opensearch, "OPENSEARCH_VERIFY_CERTS", False
+                    ),
                     request_timeout=2.0,
                 )
                 try:

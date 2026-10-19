@@ -1,5 +1,3 @@
-
-
 import logging
 import time
 from datetime import UTC, datetime
@@ -61,7 +59,9 @@ class ExplanationAgent:
         template_name: str = "xai_narrative.j2",
     ) -> None:
         self.db = db_session
-        self.enrichment_agent = enrichment_agent or TelemetryEnrichmentAgent(db_session=db_session)
+        self.enrichment_agent = enrichment_agent or TelemetryEnrichmentAgent(
+            db_session=db_session
+        )
         self.guardrails = guardrail_enforcer or LLMGuardrailEnforcer()
 
         # Locate and configure Jinja2 template environment
@@ -90,7 +90,9 @@ class ExplanationAgent:
         """
         start_time = time.perf_counter()
 
-        with tracer.start_as_current_span("explanation_agent.generate_explanation") as span:
+        with tracer.start_as_current_span(
+            "explanation_agent.generate_explanation"
+        ) as span:
             span.set_attribute("assessment_id", str(assessment_id))
 
             # 1. Check existing record
@@ -105,7 +107,9 @@ class ExplanationAgent:
 
             # 2. Enrich context bundle
             context_bundle: EnrichedContextBundle = (
-                await self.enrichment_agent.build_context_bundle(assessment_id=assessment_id)
+                await self.enrichment_agent.build_context_bundle(
+                    assessment_id=assessment_id
+                )
             )
 
             # 3. Render prompt
@@ -160,9 +164,17 @@ class ExplanationAgent:
         sanitized_assessment = sanitize_for_llm(context_bundle.assessment)
         sanitized_detection = sanitize_for_llm(context_bundle.detection)
         sanitized_investigation = sanitize_for_llm(context_bundle.investigation)
-        sanitized_override = sanitize_for_llm(context_bundle.analyst_override) if context_bundle.analyst_override else None
-        sanitized_threat_intel = sanitize_for_llm(context_bundle.threat_intel_summary) if context_bundle.threat_intel_summary else None
-        
+        sanitized_override = (
+            sanitize_for_llm(context_bundle.analyst_override)
+            if context_bundle.analyst_override
+            else None
+        )
+        sanitized_threat_intel = (
+            sanitize_for_llm(context_bundle.threat_intel_summary)
+            if context_bundle.threat_intel_summary
+            else None
+        )
+
         return self.template.render(
             assessment=sanitized_assessment,
             detection=sanitized_detection,
@@ -180,24 +192,36 @@ class ExplanationAgent:
         # Log prompt hash instead of prompt text for security
         prompt_hash = hash_prompt(prompt)
         logger.info("LLM prompt hash: %s", prompt_hash)
-        
+
         provider = settings.llm.LLM_PROVIDER.lower()
-        
+
         # Check if API keys are configured
-        openai_key = settings.llm.OPENAI_API_KEY.get_secret_value() if hasattr(settings.llm.OPENAI_API_KEY, 'get_secret_value') else str(settings.llm.OPENAI_API_KEY)
-        anthropic_key = settings.llm.ANTHROPIC_API_KEY.get_secret_value() if hasattr(settings.llm.ANTHROPIC_API_KEY, 'get_secret_value') else str(settings.llm.ANTHROPIC_API_KEY)
-        
+        openai_key = (
+            settings.llm.OPENAI_API_KEY.get_secret_value()
+            if hasattr(settings.llm.OPENAI_API_KEY, "get_secret_value")
+            else str(settings.llm.OPENAI_API_KEY)
+        )
+        anthropic_key = (
+            settings.llm.ANTHROPIC_API_KEY.get_secret_value()
+            if hasattr(settings.llm.ANTHROPIC_API_KEY, "get_secret_value")
+            else str(settings.llm.ANTHROPIC_API_KEY)
+        )
+
         has_openai = bool(openai_key and openai_key.strip())
         has_anthropic = bool(anthropic_key and anthropic_key.strip())
-        
+
         # If no API keys configured, use deterministic fallback
         if provider == "openai" and not has_openai:
-            logger.warning("OPENAI_API_KEY not configured, using deterministic fallback")
+            logger.warning(
+                "OPENAI_API_KEY not configured, using deterministic fallback"
+            )
             return await self._deterministic_fallback(prompt)
         elif provider == "anthropic" and not has_anthropic:
-            logger.warning("ANTHROPIC_API_KEY not configured, using deterministic fallback")
+            logger.warning(
+                "ANTHROPIC_API_KEY not configured, using deterministic fallback"
+            )
             return await self._deterministic_fallback(prompt)
-        
+
         if provider == "anthropic":
             return await self._call_anthropic(prompt)
         elif provider == "openai":
@@ -213,7 +237,7 @@ class ExplanationAgent:
         Renders audit_summary.j2 template with source=DETERMINISTIC_TEMPLATE.
         """
         logger.info("Generating deterministic fallback explanation")
-        
+
         # Parse the prompt to extract context (simplified - in production, pass context directly)
         # For now, return a structured deterministic response
         fallback_response = {
@@ -231,8 +255,9 @@ class ExplanationAgent:
             "guardrails_passed": True,
             "source": "DETERMINISTIC_TEMPLATE",
         }
-        
+
         import json
+
         return "deterministic-fallback", json.dumps(fallback_response)
 
     @retry(

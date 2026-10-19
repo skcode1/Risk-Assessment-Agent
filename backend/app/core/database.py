@@ -1,7 +1,3 @@
-from sqlalchemy.pool import NullPool
-
-
-
 import logging
 from collections.abc import AsyncGenerator
 
@@ -14,6 +10,7 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.pool import NullPool
 
 from app.core.config import settings
 
@@ -26,7 +23,7 @@ class Base(DeclarativeBase):
 
 def create_app_engine() -> AsyncEngine:
     connection_url = str(settings.db.ASYNC_DATABASE_URI)
-    
+
     engine: AsyncEngine = create_async_engine(
         connection_url,
         poolclass=NullPool,
@@ -66,11 +63,19 @@ async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
             await session.commit()
         except SQLAlchemyError as db_err:
             await session.rollback()
-            logger.error("Database transaction rolled back due to database error: %s", db_err, exc_info=True)
+            logger.error(
+                "Database transaction rolled back due to database error: %s",
+                db_err,
+                exc_info=True,
+            )
             raise
         except Exception as exc:
             await session.rollback()
-            logger.error("Database transaction rolled back due to unhandled exception: %s", exc, exc_info=True)
+            logger.error(
+                "Database transaction rolled back due to unhandled exception: %s",
+                exc,
+                exc_info=True,
+            )
             raise
 
 
@@ -94,7 +99,9 @@ async def init_db_engine() -> None:
     """
     is_connected = await verify_database_connection()
     if not is_connected:
-        logger.warning("Initial PostgreSQL ping failed. Database may be unreachable or initializing.")
+        logger.warning(
+            "Initial PostgreSQL ping failed. Database may be unreachable or initializing."
+        )
     else:
         logger.info("PostgreSQL connection pool verified and ready.")
 

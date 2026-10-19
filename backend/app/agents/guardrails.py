@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 import re
@@ -40,8 +38,12 @@ class LLMGuardrailEnforcer:
     # Keywords signaling unauthorized score recalculations or modifications
     _TAMPER_PATTERNS = [
         re.compile(r"adjust(?:ed|ing)?\s+the\s+score\s+to", re.IGNORECASE),
-        re.compile(r"recalculated\s+(?:the\s+)?(?:score|rating)\s+(?:as|to)", re.IGNORECASE),
-        re.compile(r"should\s+be\s+(?:downgraded|upgraded|changed)\s+to", re.IGNORECASE),
+        re.compile(
+            r"recalculated\s+(?:the\s+)?(?:score|rating)\s+(?:as|to)", re.IGNORECASE
+        ),
+        re.compile(
+            r"should\s+be\s+(?:downgraded|upgraded|changed)\s+to", re.IGNORECASE
+        ),
         re.compile(r"actual\s+risk\s+is\s+closer\s+to", re.IGNORECASE),
         re.compile(r"override\s+the\s+deterministic\s+score", re.IGNORECASE),
     ]
@@ -92,7 +94,9 @@ class LLMGuardrailEnforcer:
             try:
                 parsed_data = json.loads(cleaned_payload)
                 if not isinstance(parsed_data, dict):
-                    return self._failure("Parsed response is not a valid JSON dictionary", checks)
+                    return self._failure(
+                        "Parsed response is not a valid JSON dictionary", checks
+                    )
                 checks["json_syntax_valid"] = True
             except json.JSONDecodeError as jde:
                 logger.warning("Guardrail JSON parsing failure: %s", jde)
@@ -155,7 +159,9 @@ class LLMGuardrailEnforcer:
 
             # 7. Verify Categorical Rating Invariance
             expected_rating_str = (
-                baseline_rating.value if isinstance(baseline_rating, RiskCategory) else str(baseline_rating)
+                baseline_rating.value
+                if isinstance(baseline_rating, RiskCategory)
+                else str(baseline_rating)
             ).upper()
 
             # Ensure contradictory rating labels are not asserted as the actual rating

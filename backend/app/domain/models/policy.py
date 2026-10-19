@@ -20,6 +20,7 @@ class PolicyWeights:
     Dynamic weighting coefficients applied to the 4 normalized sub-scores.
     Enforces exact Decimal precision and dynamically validates that weights sum strictly to 1.00.
     """
+
     behavior: Decimal
     frequency: Decimal
     sensitivity: Decimal
@@ -33,7 +34,9 @@ class PolicyWeights:
                 try:
                     raw_val = Decimal(str(raw_val))
                 except (InvalidOperation, TypeError, ValueError) as err:
-                    raise ValueError(f"Weight '{field_name}' must be convertible to Decimal: {err}") from err
+                    raise ValueError(
+                        f"Weight '{field_name}' must be convertible to Decimal: {err}"
+                    ) from err
                 object.__setattr__(self, field_name, raw_val)
 
             quantized_val = raw_val.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
@@ -89,6 +92,7 @@ class CategoryThresholdRange:
     """
     Defines an inclusive lower boundary and an inclusive upper boundary for a risk category tier.
     """
+
     category: RiskCategory
     min_score: Decimal
     max_score: Decimal
@@ -100,7 +104,9 @@ class CategoryThresholdRange:
                 try:
                     raw_val = Decimal(str(raw_val))
                 except (InvalidOperation, TypeError, ValueError) as err:
-                    raise ValueError(f"Threshold '{field_name}' must be a valid Decimal: {err}") from err
+                    raise ValueError(
+                        f"Threshold '{field_name}' must be a valid Decimal: {err}"
+                    ) from err
                 object.__setattr__(self, field_name, raw_val)
 
             q_val = raw_val.quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
@@ -136,11 +142,14 @@ class ThresholdConfig:
     Dynamic container for all risk category boundaries.
     Validates range continuity, checks for gaps and overlaps, and enforces global coverage across [0.0, 100.0].
     """
+
     tiers: tuple[CategoryThresholdRange, ...]
 
     def __post_init__(self) -> None:
         if not self.tiers:
-            raise ValueError("Threshold configuration must define at least one category tier.")
+            raise ValueError(
+                "Threshold configuration must define at least one category tier."
+            )
 
         # Sort tiers strictly by lower boundary
         sorted_tiers = sorted(self.tiers, key=lambda t: t.min_score)
@@ -198,7 +207,9 @@ class ThresholdConfig:
             if self.tiers[i].max_score < q_score < self.tiers[i + 1].min_score:
                 return self.tiers[i].category
 
-        raise ValueError(f"Score {q_score} could not be resolved against configured thresholds.")
+        raise ValueError(
+            f"Score {q_score} could not be resolved against configured thresholds."
+        )
 
     def to_dict(self) -> dict[str, Any]:
         return {tier.category.value.lower(): tier.to_dict() for tier in self.tiers}
@@ -218,10 +229,20 @@ class ThresholdConfig:
             if isinstance(bounds, (list, tuple)) and len(bounds) == 2:
                 min_s, max_s = bounds
             elif isinstance(bounds, dict):
-                min_s = bounds.get("min_score") or bounds.get("min") or bounds.get("min_val")
-                max_s = bounds.get("max_score") or bounds.get("max") or bounds.get("max_val")
+                min_s = (
+                    bounds.get("min_score")
+                    or bounds.get("min")
+                    or bounds.get("min_val")
+                )
+                max_s = (
+                    bounds.get("max_score")
+                    or bounds.get("max")
+                    or bounds.get("max_val")
+                )
             else:
-                raise ValueError(f"Unsupported format for threshold bounds definition: {bounds}")
+                raise ValueError(
+                    f"Unsupported format for threshold bounds definition: {bounds}"
+                )
 
             parsed_ranges.append(
                 CategoryThresholdRange(
@@ -240,6 +261,7 @@ class RiskPolicy:
     Authoritative domain model for versioned Risk Assessment policies.
     Maintains weights, thresholds, dynamic asset sensitivity overrides, and full lifecycle metadata.
     """
+
     name: str
     version: str
     weights: PolicyWeights

@@ -1,5 +1,3 @@
-
-
 import logging
 from collections.abc import AsyncGenerator
 
@@ -88,6 +86,7 @@ async def verify_redis_connection() -> bool:
 # Sliding-Window Counters & Distributed Idempotency Locks
 # ---------------------------------------------------------------------------
 
+
 async def check_idempotency_lock(key: str, ttl_seconds: int = 60) -> bool:
     """
     Atomic distributed lock using SET NX EX.
@@ -96,7 +95,9 @@ async def check_idempotency_lock(key: str, ttl_seconds: int = 60) -> bool:
     """
     client = await get_redis_client()
     try:
-        acquired = await client.set(f"lock:idempotency:{key}", "1", ex=ttl_seconds, nx=True)
+        acquired = await client.set(
+            f"lock:idempotency:{key}", "1", ex=ttl_seconds, nx=True
+        )
         return bool(acquired)
     except RedisError as exc:
         logger.error("Failed to acquire idempotency lock for key %s: %s", key, exc)
@@ -122,6 +123,7 @@ async def increment_sliding_window_counter(
     Removes entries older than `window_seconds` and returns current frequency count.
     """
     import time
+
     now = current_timestamp or time.time()
     cutoff = now - window_seconds
     redis_key = f"counter:sliding:{entity_key}"
@@ -141,7 +143,9 @@ async def increment_sliding_window_counter(
             results = await pipe.execute()
             return int(results[2])
     except RedisError as exc:
-        logger.error("Failed executing sliding-window counter for entity %s: %s", entity_key, exc)
+        logger.error(
+            "Failed executing sliding-window counter for entity %s: %s", entity_key, exc
+        )
         return 1
 
 

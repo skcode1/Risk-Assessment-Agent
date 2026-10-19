@@ -109,7 +109,10 @@ class PolicyManagementService:
                         response.model_dump_json(),
                         ex=ACTIVE_POLICY_CACHE_TTL,
                     )
-                    logger.debug("Active policy cached in Redis with TTL %ss", ACTIVE_POLICY_CACHE_TTL)
+                    logger.debug(
+                        "Active policy cached in Redis with TTL %ss",
+                        ACTIVE_POLICY_CACHE_TTL,
+                    )
                 except Exception as e:
                     logger.warning("Redis cache write failed for active policy: %s", e)
 
@@ -117,7 +120,9 @@ class PolicyManagementService:
 
     async def get_policy_by_version(self, version: str) -> PolicyResponse:
         """Retrieves a specific policy by its immutable version identifier."""
-        with tracer.start_as_current_span("policy_service.get_policy_by_version") as span:
+        with tracer.start_as_current_span(
+            "policy_service.get_policy_by_version"
+        ) as span:
             span.set_attribute("policy_version", version)
             policy_model = await self._find_model_by_version(version)
             return self._model_to_response(policy_model)
@@ -146,7 +151,9 @@ class PolicyManagementService:
             if not include_inactive:
                 stmt = stmt.where(PolicyModel.is_active.is_(True))
 
-            stmt = stmt.order_by(PolicyModel.created_at.desc()).limit(limit).offset(offset)
+            stmt = (
+                stmt.order_by(PolicyModel.created_at.desc()).limit(limit).offset(offset)
+            )
             result = await self.db.execute(stmt)
             records = result.scalars().all()
 
@@ -166,7 +173,9 @@ class PolicyManagementService:
             span.set_attribute("policy_version", request.version)
 
             # Check if version already exists
-            existing_stmt = select(PolicyModel.policy_id).where(PolicyModel.version == request.version)
+            existing_stmt = select(PolicyModel.policy_id).where(
+                PolicyModel.version == request.version
+            )
             existing = await self.db.execute(existing_stmt)
             if existing.scalar_one_or_none() is not None:
                 raise PolicyConflictException(version=request.version)
@@ -192,7 +201,8 @@ class PolicyManagementService:
                 weight_history=policy_domain.weights.history,
                 thresholds_config=self._serialize_thresholds(policy_domain.thresholds),
                 endpoint_class_weights={
-                    k.value: str(v) for k, v in policy_domain.endpoint_class_weights.items()
+                    k.value: str(v)
+                    for k, v in policy_domain.endpoint_class_weights.items()
                 },
                 metadata_info=request.metadata or {},
                 created_by=actor_identifier,
@@ -264,7 +274,11 @@ class PolicyManagementService:
         return model
 
     async def _deactivate_all_policies(self) -> None:
-        stmt = update(PolicyModel).where(PolicyModel.is_active.is_(True)).values(is_active=False)
+        stmt = (
+            update(PolicyModel)
+            .where(PolicyModel.is_active.is_(True))
+            .values(is_active=False)
+        )
         await self.db.execute(stmt)
 
     def _validate_policy_invariants(self, policy: RiskPolicy) -> None:

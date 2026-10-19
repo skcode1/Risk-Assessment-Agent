@@ -19,6 +19,7 @@ class DetectionMetrics:
     Confidence, rule fidelity, and precision metrics attached to a detection.
     Supplies telemetry to the Behavior sub-score calculator.
     """
+
     confidence: Decimal
     fidelity: Decimal | None = None
     rule_accuracy_hint: Decimal | None = None
@@ -30,7 +31,10 @@ class DetectionMetrics:
             conf = Decimal(str(conf))
             object.__setattr__(self, "confidence", conf)
 
-        q_conf = conf.quantize(Decimal("0.0001") if conf <= Decimal("1.0") else Decimal("0.1"), rounding=ROUND_HALF_UP)
+        q_conf = conf.quantize(
+            Decimal("0.0001") if conf <= Decimal("1.0") else Decimal("0.1"),
+            rounding=ROUND_HALF_UP,
+        )
         object.__setattr__(self, "confidence", q_conf)
 
         if not (Decimal("0.0") <= q_conf <= Decimal("100.0")):
@@ -68,6 +72,7 @@ class DetectionContext:
     """
     Host, user, signature, and network metadata tied to the detection.
     """
+
     rule_id: str
     rule_name: str
     technique_id: str | None = None
@@ -90,6 +95,7 @@ class DetectionEvent:
     Authoritative immutable domain model representing an ingested detection event.
     Guarantees strict schema integrity, UTC timestamps, and unique distributed tracking IDs.
     """
+
     source_type: DetectionSourceType
     severity: DetectionSeverity
     metrics: DetectionMetrics
@@ -132,7 +138,9 @@ class DetectionEvent:
             "severity": self.severity.value,
             "metrics": {
                 "confidence": float(self.metrics.confidence),
-                "fidelity": float(self.metrics.fidelity) if self.metrics.fidelity is not None else None,
+                "fidelity": float(self.metrics.fidelity)
+                if self.metrics.fidelity is not None
+                else None,
                 "rule_accuracy_hint": (
                     float(self.metrics.rule_accuracy_hint)
                     if self.metrics.rule_accuracy_hint is not None

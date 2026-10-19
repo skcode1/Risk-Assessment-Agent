@@ -19,6 +19,7 @@ class RiskComponents:
     Immutable representation of normalized sub-scores (0.0 to 100.0 scale).
     Risk formula: 0.4*B + 0.3*F + 0.2*S + 0.1*H.
     """
+
     behavior: Decimal
     frequency: Decimal
     sensitivity: Decimal
@@ -31,7 +32,7 @@ class RiskComponents:
             if not isinstance(val, Decimal):
                 val = Decimal(str(val))
                 object.__setattr__(self, field_name, val)
-            
+
             q_val = val.quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
             object.__setattr__(self, field_name, q_val)
 
@@ -55,6 +56,7 @@ class AppliedPolicySnapshot:
     Preserved snapshot of policy parameters active during score calculation.
     Guarantees replayability and deterministic validation across simulation runs.
     """
+
     policy_id: UUID
     version: str
     weights: dict[str, Decimal]
@@ -80,7 +82,7 @@ class AppliedPolicySnapshot:
     def resolve_category(self, score: Decimal) -> RiskCategory:
         """Resolve category using the snapshot's thresholds."""
         q_score = score.quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
-        
+
         # Reconstruct threshold tiers from snapshot
         tiers = self.thresholds.get("tiers", [])
         for tier in tiers:
@@ -88,7 +90,7 @@ class AppliedPolicySnapshot:
             max_score = Decimal(str(tier["max_score"]))
             if min_score <= q_score <= max_score:
                 return RiskCategory(tier["category"])
-        
+
         # Fallback to spec defaults
         if q_score < Decimal("40.0"):
             return RiskCategory.LOW
@@ -106,6 +108,7 @@ class RiskAssessment:
     Authoritative domain entity for computed risk assessments.
     Enforces deterministic reproducibility, data immutability, and spec invariants.
     """
+
     detection_event_id: UUID
     investigation_id: UUID
     correlation_id: UUID
@@ -127,16 +130,20 @@ class RiskAssessment:
         if not isinstance(score, Decimal):
             score = Decimal(str(score))
             object.__setattr__(self, "risk_score", score)
-        
+
         q_score = score.quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
         object.__setattr__(self, "risk_score", q_score)
 
         if not (Decimal("0.0") <= q_score <= Decimal("100.0")):
-            raise ValueError(f"authoritative risk_score must be between 0.0 and 100.0, got {q_score}")
+            raise ValueError(
+                f"authoritative risk_score must be between 0.0 and 100.0, got {q_score}"
+            )
 
         # Ensure UTC timezone integrity
         if self.computed_at.tzinfo is None:
-            object.__setattr__(self, "computed_at", self.computed_at.replace(tzinfo=UTC))
+            object.__setattr__(
+                self, "computed_at", self.computed_at.replace(tzinfo=UTC)
+            )
         else:
             object.__setattr__(self, "computed_at", self.computed_at.astimezone(UTC))
 

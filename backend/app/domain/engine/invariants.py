@@ -19,14 +19,18 @@ from app.domain.models.policy import RiskPolicy
 class InvariantViolationError(ValueError):
     """Raised when an architectural, mathematical, or integrity invariant is violated."""
 
-    def __init__(self, rule_name: str, message: str, context: Mapping[str, Any] | None = None) -> None:
+    def __init__(
+        self, rule_name: str, message: str, context: Mapping[str, Any] | None = None
+    ) -> None:
         self.rule_name = rule_name
         self.context = dict(context) if context else {}
         # Public contract used by exception handlers and the orchestration
         # services when translating invariant failures into API errors.
         self.message = message
         self.details = self.context
-        super().__init__(f"[{rule_name}] Invariant Violation: {message} | Context: {self.context}")
+        super().__init__(
+            f"[{rule_name}] Invariant Violation: {message} | Context: {self.context}"
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -35,12 +39,18 @@ class InvariantRuleConfig:
     Dynamic parameters governing precision bounds, quantization formats, and thresholds.
     Eliminates hardcoded mathematical assertions and enables runtime policy synchronization.
     """
+
     min_score_bound: Decimal = Decimal("0.0")
     max_score_bound: Decimal = Decimal("100.0")
     quantization_precision: Decimal = Decimal("0.1")
     rounding_mode: str = ROUND_HALF_UP
     enforce_weight_sum_unity: bool = True
-    required_component_keys: Sequence[str] = ("behavior", "frequency", "sensitivity", "history")
+    required_component_keys: Sequence[str] = (
+        "behavior",
+        "frequency",
+        "sensitivity",
+        "history",
+    )
 
     def __post_init__(self) -> None:
         if self.min_score_bound >= self.max_score_bound:
@@ -123,7 +133,9 @@ class ScoringInvariantVerifier:
         """
         q_score = self.enforce_decimal_quantization(score, field_name)
 
-        if not (self._config.min_score_bound <= q_score <= self._config.max_score_bound):
+        if not (
+            self._config.min_score_bound <= q_score <= self._config.max_score_bound
+        ):
             raise InvariantViolationError(
                 rule_name="SCORE_BOUND_VIOLATION",
                 message=(
@@ -171,10 +183,18 @@ class ScoringInvariantVerifier:
         self.enforce_non_null(policy.weights, "policy.weights")
         if self._config.enforce_weight_sum_unity:
             total_weight = (
-                self.enforce_decimal_quantization(policy.weights.behavior, "policy.weights.behavior")
-                + self.enforce_decimal_quantization(policy.weights.frequency, "policy.weights.frequency")
-                + self.enforce_decimal_quantization(policy.weights.sensitivity, "policy.weights.sensitivity")
-                + self.enforce_decimal_quantization(policy.weights.history, "policy.weights.history")
+                self.enforce_decimal_quantization(
+                    policy.weights.behavior, "policy.weights.behavior"
+                )
+                + self.enforce_decimal_quantization(
+                    policy.weights.frequency, "policy.weights.frequency"
+                )
+                + self.enforce_decimal_quantization(
+                    policy.weights.sensitivity, "policy.weights.sensitivity"
+                )
+                + self.enforce_decimal_quantization(
+                    policy.weights.history, "policy.weights.history"
+                )
             )
             if total_weight != Decimal("1.00"):
                 raise InvariantViolationError(
@@ -197,8 +217,12 @@ class ScoringInvariantVerifier:
         self.enforce_valid_uuid(detection.correlation_id, "detection.correlation_id")
 
         self.enforce_non_null(investigation, "investigation")
-        self.enforce_valid_uuid(investigation.investigation_id, "investigation.investigation_id")
-        self.enforce_valid_uuid(investigation.correlation_id, "investigation.correlation_id")
+        self.enforce_valid_uuid(
+            investigation.investigation_id, "investigation.investigation_id"
+        )
+        self.enforce_valid_uuid(
+            investigation.correlation_id, "investigation.correlation_id"
+        )
 
         if detection.correlation_id != investigation.correlation_id:
             raise InvariantViolationError(
@@ -219,12 +243,18 @@ class ScoringInvariantVerifier:
         """
         self.enforce_non_null(assessment, "assessment")
         self.enforce_valid_uuid(assessment.assessment_id, "assessment.assessment_id")
-        self.enforce_valid_uuid(assessment.detection_event_id, "assessment.detection_event_id")
-        self.enforce_valid_uuid(assessment.investigation_id, "assessment.investigation_id")
+        self.enforce_valid_uuid(
+            assessment.detection_event_id, "assessment.detection_event_id"
+        )
+        self.enforce_valid_uuid(
+            assessment.investigation_id, "assessment.investigation_id"
+        )
         self.enforce_valid_uuid(assessment.correlation_id, "assessment.correlation_id")
 
         # 1. Bounds check on the authoritative score
-        score = self.enforce_score_bounds(assessment.risk_score, "assessment.risk_score")
+        score = self.enforce_score_bounds(
+            assessment.risk_score, "assessment.risk_score"
+        )
 
         # 2. Component sub-score checks
         self.verify_components(assessment.components)
@@ -247,10 +277,18 @@ class ScoringInvariantVerifier:
             )
 
         # 4. Strict spec numerical invariant check: Verify calculation determinism
-        w_b = self.enforce_decimal_quantization(policy.weights.behavior, "weights.behavior")
-        w_f = self.enforce_decimal_quantization(policy.weights.frequency, "weights.frequency")
-        w_s = self.enforce_decimal_quantization(policy.weights.sensitivity, "weights.sensitivity")
-        w_h = self.enforce_decimal_quantization(policy.weights.history, "weights.history")
+        w_b = self.enforce_decimal_quantization(
+            policy.weights.behavior, "weights.behavior"
+        )
+        w_f = self.enforce_decimal_quantization(
+            policy.weights.frequency, "weights.frequency"
+        )
+        w_s = self.enforce_decimal_quantization(
+            policy.weights.sensitivity, "weights.sensitivity"
+        )
+        w_h = self.enforce_decimal_quantization(
+            policy.weights.history, "weights.history"
+        )
 
         recalculated_raw = (
             (assessment.components.behavior * w_b)

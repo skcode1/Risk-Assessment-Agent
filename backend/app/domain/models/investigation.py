@@ -19,6 +19,7 @@ class TouchedEndpoint:
     Detailed metadata for an individual asset or node observed during investigation.
     Supports granular asset sensitivity attribution and audit verification.
     """
+
     endpoint_id: str
     endpoint_class: EndpointClass = EndpointClass.UNKNOWN
     ip_address: str | None = None
@@ -43,6 +44,7 @@ class InvestigationTelemetry:
     Raw numerical and categorical metrics captured during telemetry correlation.
     Feeds directly into Frequency, Sensitivity, and History component calculators.
     """
+
     event_frequency: int
     endpoints_touched: int
     endpoint_class: EndpointClass
@@ -51,9 +53,13 @@ class InvestigationTelemetry:
 
     def __post_init__(self) -> None:
         if self.event_frequency < 0:
-            raise ValueError(f"event_frequency must be non-negative, got {self.event_frequency}")
+            raise ValueError(
+                f"event_frequency must be non-negative, got {self.event_frequency}"
+            )
         if self.endpoints_touched < 0:
-            raise ValueError(f"endpoints_touched must be non-negative, got {self.endpoints_touched}")
+            raise ValueError(
+                f"endpoints_touched must be non-negative, got {self.endpoints_touched}"
+            )
         if self.historical_incident_count < 0:
             raise ValueError(
                 f"historical_incident_count must be non-negative, got {self.historical_incident_count}"
@@ -67,7 +73,9 @@ class InvestigationTelemetry:
             q_sev = sev.quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
             object.__setattr__(self, "severity_hint", q_sev)
             if not (Decimal("0.0") <= q_sev <= Decimal("100.0")):
-                raise ValueError(f"severity_hint must be bounded between [0.0, 100.0], got {q_sev}")
+                raise ValueError(
+                    f"severity_hint must be bounded between [0.0, 100.0], got {q_sev}"
+                )
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -75,7 +83,9 @@ class InvestigationTelemetry:
             "endpoints_touched": self.endpoints_touched,
             "endpoint_class": self.endpoint_class.value,
             "historical_incident_count": self.historical_incident_count,
-            "severity_hint": float(self.severity_hint) if self.severity_hint is not None else None,
+            "severity_hint": float(self.severity_hint)
+            if self.severity_hint is not None
+            else None,
         }
 
 
@@ -85,6 +95,7 @@ class InvestigationResult:
     Authoritative domain model for completed investigations.
     Preserves immutable investigation findings, correlation tracking, and evidence digests.
     """
+
     detection_event_id: UUID
     correlation_id: UUID
     telemetry: InvestigationTelemetry

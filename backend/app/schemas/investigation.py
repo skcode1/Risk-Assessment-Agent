@@ -20,6 +20,7 @@ from pydantic import (
 
 class EndpointClass(str, Enum):
     """Asset sensitivity tier classification."""
+
     CRITICAL_INFRASTRUCTURE = "CRITICAL_INFRASTRUCTURE"
     DOMAIN_CONTROLLER = "DOMAIN_CONTROLLER"
     DATABASE_SERVER = "DATABASE_SERVER"
@@ -31,23 +32,38 @@ class EndpointClass(str, Enum):
 
 class TouchedEndpointDetail(BaseModel):
     """Metadata regarding an individual asset touched during the incident window."""
+
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     endpoint_id: Annotated[
         str,
-        Field(..., min_length=1, max_length=128, description="Asset tag, hostname, or hardware UUID."),
+        Field(
+            ...,
+            min_length=1,
+            max_length=128,
+            description="Asset tag, hostname, or hardware UUID.",
+        ),
     ]
     endpoint_class: Annotated[
         EndpointClass,
-        Field(default=EndpointClass.UNKNOWN, description="Sensitivity classification of this asset."),
+        Field(
+            default=EndpointClass.UNKNOWN,
+            description="Sensitivity classification of this asset.",
+        ),
     ]
     ip_address: Annotated[
         str | None,
-        Field(default=None, description="IP address observed on this asset during the event window."),
+        Field(
+            default=None,
+            description="IP address observed on this asset during the event window.",
+        ),
     ]
     is_compromised: Annotated[
         bool,
-        Field(default=False, description="Flag indicating active exploitation vs benign telemetry contact."),
+        Field(
+            default=False,
+            description="Flag indicating active exploitation vs benign telemetry contact.",
+        ),
     ]
 
 
@@ -60,6 +76,7 @@ class InvestigationTelemetryMetrics(BaseModel):
     Core numerical metrics captured by the Investigation Layer.
     These fields feed directly into the Frequency, Sensitivity, and History calculators.
     """
+
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     event_frequency: Annotated[
@@ -111,17 +128,27 @@ class InvestigationTelemetryMetrics(BaseModel):
 
 class InvestigationResultBase(BaseModel):
     """Base fields representing core investigation findings."""
+
     detection_event_id: Annotated[
         UUID,
-        Field(..., description="ID of the originating DetectionEvent triggering this investigation."),
+        Field(
+            ...,
+            description="ID of the originating DetectionEvent triggering this investigation.",
+        ),
     ]
     correlation_id: Annotated[
         UUID,
-        Field(..., description="Distributed correlation ID spanning detection through risk assessment."),
+        Field(
+            ...,
+            description="Distributed correlation ID spanning detection through risk assessment.",
+        ),
     ]
     telemetry: Annotated[
         InvestigationTelemetryMetrics,
-        Field(..., description="Correlated counts, touched endpoints, and historical metrics."),
+        Field(
+            ...,
+            description="Correlated counts, touched endpoints, and historical metrics.",
+        ),
     ]
     touched_endpoints_detail: Annotated[
         list[TouchedEndpointDetail],
@@ -149,6 +176,7 @@ class InvestigationResultBase(BaseModel):
 
 class InvestigationResultCreate(InvestigationResultBase):
     """Ingestion/generation payload model submitted by the Investigation Layer."""
+
     model_config = ConfigDict(extra="ignore", str_strip_whitespace=True)
 
     investigation_id: Annotated[
@@ -180,6 +208,7 @@ InvestigationCreateRequest = InvestigationResultCreate
 
 class InvestigationResult(InvestigationResultBase):
     """Authoritative InvestigationResult contract consumed by the Risk Scoring Engine."""
+
     model_config = ConfigDict(
         from_attributes=True,
         frozen=True,
@@ -196,7 +225,10 @@ class InvestigationResult(InvestigationResultBase):
     ]
     investigated_at: Annotated[
         datetime,
-        Field(..., description="Normalized UTC timestamp representing investigation completion."),
+        Field(
+            ...,
+            description="Normalized UTC timestamp representing investigation completion.",
+        ),
     ]
     created_at: Annotated[
         datetime,
@@ -239,27 +271,41 @@ class InvestigationResult(InvestigationResultBase):
 
 class InvestigationResponse(InvestigationResultBase):
     """Standard persisted investigation entity returned by API endpoints."""
+
     model_config = ConfigDict(from_attributes=True)
 
-    investigation_id: Annotated[UUID, Field(..., description="Unique investigation entity UUID.")]
-    investigated_at: Annotated[datetime, Field(..., description="UTC completion timestamp.")]
+    investigation_id: Annotated[
+        UUID, Field(..., description="Unique investigation entity UUID.")
+    ]
+    investigated_at: Annotated[
+        datetime, Field(..., description="UTC completion timestamp.")
+    ]
     created_at: Annotated[
         datetime,
-        Field(default_factory=lambda: datetime.now(UTC), description="Persistence timestamp."),
+        Field(
+            default_factory=lambda: datetime.now(UTC),
+            description="Persistence timestamp.",
+        ),
     ]
 
 
 class InvestigationDetailResponse(InvestigationResponse):
     """Expanded forensic detail response returned by GET /api/v1/investigations/{id}."""
+
     model_config = ConfigDict(from_attributes=True)
 
     status: Annotated[
         str,
-        Field(default="COMPLETED", description="Investigation status (e.g., PENDING, IN_PROGRESS, COMPLETED)."),
+        Field(
+            default="COMPLETED",
+            description="Investigation status (e.g., PENDING, IN_PROGRESS, COMPLETED).",
+        ),
     ]
     analyst_notes: Annotated[
         str | None,
-        Field(default=None, description="Optional reviewer commentary or triage context."),
+        Field(
+            default=None, description="Optional reviewer commentary or triage context."
+        ),
     ]
     updated_at: Annotated[
         datetime | None,
@@ -269,6 +315,7 @@ class InvestigationDetailResponse(InvestigationResponse):
 
 class InvestigationListResponse(BaseModel):
     """Paginated collection wrapper for investigation entities."""
+
     model_config = ConfigDict(from_attributes=True)
 
     items: Annotated[
@@ -282,13 +329,26 @@ class InvestigationListResponse(BaseModel):
 
 class InvestigationFilterParams(BaseModel):
     """Query parameter validation model for searching investigations."""
+
     model_config = ConfigDict(extra="forbid")
 
-    detection_event_id: UUID | None = Field(default=None, description="Filter by detection event UUID.")
-    correlation_id: UUID | None = Field(default=None, description="Filter by distributed correlation ID.")
-    endpoint_class: EndpointClass | None = Field(default=None, description="Filter by asset tier.")
-    min_frequency: int | None = Field(default=None, ge=0, description="Filter by minimum event frequency.")
-    start_time: datetime | None = Field(default=None, description="Inclusive starting timestamp.")
-    end_time: datetime | None = Field(default=None, description="Inclusive ending timestamp.")
+    detection_event_id: UUID | None = Field(
+        default=None, description="Filter by detection event UUID."
+    )
+    correlation_id: UUID | None = Field(
+        default=None, description="Filter by distributed correlation ID."
+    )
+    endpoint_class: EndpointClass | None = Field(
+        default=None, description="Filter by asset tier."
+    )
+    min_frequency: int | None = Field(
+        default=None, ge=0, description="Filter by minimum event frequency."
+    )
+    start_time: datetime | None = Field(
+        default=None, description="Inclusive starting timestamp."
+    )
+    end_time: datetime | None = Field(
+        default=None, description="Inclusive ending timestamp."
+    )
     limit: int = Field(default=50, ge=1, le=500, description="Page size limit.")
     offset: int = Field(default=0, ge=0, description="Page offset.")

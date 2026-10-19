@@ -63,7 +63,9 @@ async def ingest_investigation_telemetry(
     Ingests correlated investigation telemetry, updates asset footprint parameters,
     and returns the normalized investigation record with idempotency protection.
     """
-    with tracer.start_as_current_span("api.v1.endpoints.ingest_investigation_telemetry") as span:
+    with tracer.start_as_current_span(
+        "api.v1.endpoints.ingest_investigation_telemetry"
+    ) as span:
         span.set_attribute("actor_sub", claims.sub)
         span.set_attribute("correlation_id", str(request.correlation_id))
         span.set_attribute("detection_event_id", str(request.detection_event_id))
@@ -89,9 +91,11 @@ async def ingest_investigation_telemetry(
                 redis_client=redis,
             )
 
-            result: InvestigationResponse = await investigation_service.ingest_investigation(
-                request=request,
-                actor_identifier=claims.preferred_username or claims.sub,
+            result: InvestigationResponse = (
+                await investigation_service.ingest_investigation(
+                    request=request,
+                    actor_identifier=claims.preferred_username or claims.sub,
+                )
             )
 
             if redis_lock_key and lock_acquired:
@@ -118,7 +122,9 @@ async def get_investigation_by_id(
     claims: Annotated[TokenClaims, Depends(require_scopes("investigations:read"))],
 ) -> InvestigationDetailResponse:
     """Retrieves full investigation telemetry context by primary key."""
-    with tracer.start_as_current_span("api.v1.endpoints.get_investigation_by_id") as span:
+    with tracer.start_as_current_span(
+        "api.v1.endpoints.get_investigation_by_id"
+    ) as span:
         span.set_attribute("investigation_id", str(investigation_id))
         span.set_attribute("actor_sub", claims.sub)
 
@@ -147,7 +153,9 @@ async def get_investigation_by_correlation_id(
     claims: Annotated[TokenClaims, Depends(require_scopes("investigations:read"))],
 ) -> InvestigationDetailResponse:
     """Retrieves correlated investigation telemetry by correlation tracking UUID."""
-    with tracer.start_as_current_span("api.v1.endpoints.get_investigation_by_correlation_id") as span:
+    with tracer.start_as_current_span(
+        "api.v1.endpoints.get_investigation_by_correlation_id"
+    ) as span:
         span.set_attribute("correlation_id", str(correlation_id))
         span.set_attribute("actor_sub", claims.sub)
 
@@ -191,11 +199,17 @@ async def list_investigations(
         stmt = select(InvestigationModel)
 
         if dominant_class is not None:
-            stmt = stmt.where(InvestigationModel.dominant_endpoint_class == dominant_class)
+            stmt = stmt.where(
+                InvestigationModel.dominant_endpoint_class == dominant_class
+            )
         if min_frequency is not None:
             stmt = stmt.where(InvestigationModel.event_frequency >= min_frequency)
 
-        stmt = stmt.order_by(InvestigationModel.created_at.desc()).limit(limit).offset(offset)
+        stmt = (
+            stmt.order_by(InvestigationModel.created_at.desc())
+            .limit(limit)
+            .offset(offset)
+        )
         result = await db.execute(stmt)
         records = result.scalars().all()
 

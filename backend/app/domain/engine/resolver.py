@@ -34,6 +34,7 @@ class ThresholdTier:
     """
     Represents an inclusive numerical boundary tier for category classification.
     """
+
     category: RiskCategory
     min_score: Decimal
     max_score: Decimal
@@ -45,7 +46,9 @@ class ThresholdTier:
                 try:
                     raw_val = Decimal(str(raw_val))
                 except (InvalidOperation, TypeError, ValueError) as err:
-                    raise ValueError(f"Boundary '{attr}' must be convertible to Decimal: {err}") from err
+                    raise ValueError(
+                        f"Boundary '{attr}' must be convertible to Decimal: {err}"
+                    ) from err
                 object.__setattr__(self, attr, raw_val)
 
             q_val = raw_val.quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
@@ -68,11 +71,14 @@ class DynamicThresholdProfile:
     Container for an ordered collection of category threshold tiers.
     Validates range order, step gaps, and domain boundaries.
     """
+
     tiers: tuple[ThresholdTier, ...]
 
     def __post_init__(self) -> None:
         if not self.tiers:
-            raise ValueError("Threshold profile must define at least one category tier.")
+            raise ValueError(
+                "Threshold profile must define at least one category tier."
+            )
 
         sorted_tiers = sorted(self.tiers, key=lambda t: t.min_score)
         object.__setattr__(self, "tiers", tuple(sorted_tiers))
@@ -119,7 +125,9 @@ class DynamicThresholdProfile:
         return self.tiers[-1].category
 
     @classmethod
-    def from_mapping(cls, mapping: Mapping[str, Sequence[Any]]) -> "DynamicThresholdProfile":
+    def from_mapping(
+        cls, mapping: Mapping[str, Sequence[Any]]
+    ) -> "DynamicThresholdProfile":
         """
         Dynamically builds a threshold profile from a dictionary mapping category names
         to [min, max] pairs. Example:
@@ -133,7 +141,9 @@ class DynamicThresholdProfile:
         built_tiers = []
         for cat_name, bounds in mapping.items():
             if len(bounds) != 2:
-                raise ValueError(f"Tier definition for {cat_name} must contain exactly [min, max], got {bounds}.")
+                raise ValueError(
+                    f"Tier definition for {cat_name} must contain exactly [min, max], got {bounds}."
+                )
             built_tiers.append(
                 ThresholdTier(
                     category=RiskCategory(cat_name.upper()),
@@ -154,7 +164,9 @@ class DynamicRiskCategoryResolver(BaseRiskCategoryResolver):
     """
 
     def __init__(self, default_profile: DynamicThresholdProfile | None = None) -> None:
-        self._default_profile = default_profile or self._build_default_specification_profile()
+        self._default_profile = (
+            default_profile or self._build_default_specification_profile()
+        )
 
     def resolve(
         self,
@@ -185,7 +197,9 @@ class DynamicRiskCategoryResolver(BaseRiskCategoryResolver):
             try:
                 score = Decimal(str(score))
             except (InvalidOperation, TypeError, ValueError) as err:
-                raise ValueError(f"Invalid score value '{score}', cannot convert to Decimal: {err}") from err
+                raise ValueError(
+                    f"Invalid score value '{score}', cannot convert to Decimal: {err}"
+                ) from err
 
         clamped = max(Decimal("0.0"), min(Decimal("100.0"), score))
         return clamped.quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)

@@ -23,6 +23,7 @@ if TYPE_CHECKING:
 
 class RiskComponentsBreakdown(BaseModel):
     """Normalized sub-scores (0.0 - 100.0) calculated by deterministic calculators."""
+
     model_config = ConfigDict(frozen=True, extra="ignore")
 
     behavior: Annotated[float, Field(..., ge=0.0, le=100.0)]
@@ -33,6 +34,7 @@ class RiskComponentsBreakdown(BaseModel):
 
 class DetectionMetricsRequest(BaseModel):
     """Strict detector confidence metrics for deterministic scoring."""
+
     model_config = ConfigDict(extra="ignore")
 
     confidence: Annotated[float, Field(..., ge=0.0, le=100.0)]
@@ -42,6 +44,7 @@ class DetectionMetricsRequest(BaseModel):
 
 class DetectionContextRequest(BaseModel):
     """Host, user, and network context attached to a detection event."""
+
     model_config = ConfigDict(extra="ignore")
 
     rule_id: Annotated[str, Field(..., min_length=1, max_length=128)]
@@ -61,6 +64,7 @@ class DetectionEventRequest(BaseModel):
     A malformed correlation_id (or event_id) is rejected with HTTP 422 at the
     API boundary before any persistence or idempotency lock work occurs.
     """
+
     model_config = ConfigDict(extra="ignore")
 
     event_id: Annotated[UUID | None, Field(default=None)]
@@ -73,6 +77,7 @@ class DetectionEventRequest(BaseModel):
 
 class AssessmentBase(BaseModel):
     """Core domain fields representing a risk evaluation."""
+
     model_config = ConfigDict(str_strip_whitespace=True, extra="ignore")
 
     source_ip: Annotated[str | None, Field(default=None, max_length=64)]
@@ -86,6 +91,7 @@ class AssessmentCreateRequest(AssessmentBase):
     Ingest payload contract consumed by POST /api/v1/risk-assessments.
     Supports both canonical specification payloads and on-demand overrides.
     """
+
     model_config = ConfigDict(extra="ignore", str_strip_whitespace=True)
 
     assessment_id: Annotated[UUID | None, Field(default=None)]
@@ -99,6 +105,7 @@ RiskAssessmentCreateRequest = AssessmentCreateRequest
 
 class AssessmentResponse(AssessmentBase):
     """Standard serialized risk assessment entity returned by API endpoints."""
+
     model_config = ConfigDict(from_attributes=True, extra="ignore")
 
     assessment_id: Annotated[UUID, Field(...)]
@@ -142,6 +149,7 @@ RiskAssessmentResponse = AssessmentResponse
 
 class AssessmentDetailResponse(AssessmentResponse):
     """Expanded audit payload returned by GET /api/v1/risk-assessments/{id}."""
+
     model_config = ConfigDict(from_attributes=True, extra="ignore")
 
     policy_version: Annotated[str | int | None, Field(default=1)]
@@ -164,10 +172,14 @@ class AssessmentDetailResponse(AssessmentResponse):
         if record.override_score is not None:
             metadata["override"] = {
                 "score": float(record.override_score),
-                "rating": record.override_rating.value if record.override_rating else None,
+                "rating": record.override_rating.value
+                if record.override_rating
+                else None,
                 "justification": record.override_justification,
                 "overridden_by": record.overridden_by,
-                "overridden_at": record.overridden_at.isoformat() if record.overridden_at else None,
+                "overridden_at": record.overridden_at.isoformat()
+                if record.overridden_at
+                else None,
             }
 
         return cls(
@@ -176,7 +188,9 @@ class AssessmentDetailResponse(AssessmentResponse):
             policy_id=record.policy_id,
             source_ip=record.source_ip,
             risk_score=float(record.risk_score),
-            rating=record.rating.value if hasattr(record.rating, "value") else record.rating,
+            rating=record.rating.value
+            if hasattr(record.rating, "value")
+            else record.rating,
             components={
                 "behavior": float(record.behavior_score),
                 "frequency": float(record.frequency_score),
@@ -195,6 +209,7 @@ RiskAssessmentDetailResponse = AssessmentDetailResponse
 
 class AssessmentOverrideRequest(BaseModel):
     """Schema for human-in-the-loop analyst score override and containment workflows."""
+
     model_config = ConfigDict(extra="ignore", str_strip_whitespace=True)
 
     override_score: Annotated[float, Field(..., ge=0.0, le=100.0)]
@@ -205,6 +220,7 @@ class AssessmentOverrideRequest(BaseModel):
 
 class AssessmentListResponse(BaseModel):
     """Paginated collection wrapper for risk assessment entities."""
+
     model_config = ConfigDict(from_attributes=True, extra="ignore")
 
     items: Annotated[list[AssessmentResponse], Field(default_factory=list)]

@@ -28,6 +28,7 @@ logger = logging.getLogger("app.workers.detection_consumer")
 @dataclass
 class DetectionEventMessage:
     """Parsed detection event from Kafka."""
+
     event_id: str
     correlation_id: str
     source_ip: str
@@ -37,7 +38,7 @@ class DetectionEventMessage:
 class DetectionConsumer:
     """
     Consumes detection events from Kafka and updates Redis counters.
-    
+
     Flow:
     1. Poll Kafka for messages
     2. Parse detection event
@@ -64,17 +65,23 @@ class DetectionConsumer:
         self._running = False
         self._consumer: Consumer | None = None
 
-        bootstrap = kafka_bootstrap_servers or os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
-        group = kafka_group_id or os.getenv("KAFKA_CONSUMER_GROUP", "detection-consumer-group")
+        bootstrap = kafka_bootstrap_servers or os.getenv(
+            "KAFKA_BOOTSTRAP_SERVERS", "localhost:9092"
+        )
+        group = kafka_group_id or os.getenv(
+            "KAFKA_CONSUMER_GROUP", "detection-consumer-group"
+        )
 
-        self._consumer = Consumer({
-            "bootstrap.servers": bootstrap,
-            "group.id": group,
-            "auto.offset.reset": "earliest",
-            "enable.auto.commit": False,  # Manual commit after Redis success
-            "max.poll.interval.ms": 300000,
-            "session.timeout.ms": 30000,
-        })
+        self._consumer = Consumer(
+            {
+                "bootstrap.servers": bootstrap,
+                "group.id": group,
+                "auto.offset.reset": "earliest",
+                "enable.auto.commit": False,  # Manual commit after Redis success
+                "max.poll.interval.ms": 300000,
+                "session.timeout.ms": 30000,
+            }
+        )
 
         self._key_deserializer = StringDeserializer("utf-8")
         self._value_deserializer = StringDeserializer("utf-8")
@@ -96,7 +103,9 @@ class DetectionConsumer:
     async def _update_redis_counter(self, event: DetectionEventMessage) -> bool:
         """Update Redis sliding window counter for the source IP."""
         if not event.source_ip:
-            logger.warning("Missing source_ip in detection event, skipping counter update")
+            logger.warning(
+                "Missing source_ip in detection event, skipping counter update"
+            )
             return False
 
         counter_key = f"counter:{event.source_ip}:events"
@@ -133,13 +142,17 @@ class DetectionConsumer:
             while self._running:
                 # Poll with timeout to allow periodic checks of _running flag
                 msg = self._consumer.poll(timeout=1.0)
-                
+
                 if msg is None:
                     continue
-                
+
                 if msg.error():
                     if msg.error().code() == KafkaError._PARTITION_EOF:
-                        logger.debug("Reached end of partition: %s [%d]", msg.topic(), msg.partition())
+                        logger.debug(
+                            "Reached end of partition: %s [%d]",
+                            msg.topic(),
+                            msg.partition(),
+                        )
                     else:
                         logger.error("Kafka error: %s", msg.error())
                     continue
@@ -153,17 +166,23 @@ class DetectionConsumer:
 
                 # Update Redis counter
                 success = await self._update_redis_counter(event)
-                
+
                 if success:
                     # Commit offset only after Redis success (at-least-once)
                     try:
                         self._consumer.commit(msg)
-                        logger.debug("Processed event %s for IP %s", event.event_id, event.source_ip)
+                        logger.debug(
+                            "Processed event %s for IP %s",
+                            event.event_id,
+                            event.source_ip,
+                        )
                     except KafkaException as e:
                         logger.error("Failed to commit offset: %s", e)
                 else:
                     # Don't commit offset, will retry on next poll
-                    logger.warning("Redis update failed, will retry event %s", event.event_id)
+                    logger.warning(
+                        "Redis update failed, will retry event %s", event.event_id
+                    )
 
         except asyncio.CancelledError:
             logger.info("Detection consumer cancelled")
@@ -176,17 +195,17 @@ class DetectionConsumer:
         """Stop the consumer gracefully."""
         if not self._running:
             return
-        
+
         self._running = False
         logger.info("Stopping detection consumer...")
-        
+
         if self._consumer:
             try:
                 # Close consumer (this also commits any pending offsets)
                 self._consumer.close()
             except Exception as e:
                 logger.warning("Error closing Kafka consumer: %s", e)
-        
+
         logger.info("Detection consumer stopped")
 
 
@@ -195,7 +214,7 @@ async def main() -> None:
     # Initialize Redis client
     redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
     redis_client = aioredis.from_url(redis_url, decode_responses=True)
-    
+
     try:
         # Verify Redis connection
         await redis_client.ping()
@@ -206,7 +225,7 @@ async def main() -> None:
 
     # Create and start consumer
     consumer = DetectionConsumer(redis_client=redis_client)
-    
+
     try:
         await consumer.start()
     finally:
