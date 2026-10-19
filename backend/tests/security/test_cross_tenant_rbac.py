@@ -39,7 +39,9 @@ class TestCrossRoleAndCrossTenantDenial:
         # Should be rejected at the API boundary
         assert response.status_code in (403, 404, 405)
 
-    async def test_cross_role_override_without_lead_scope(self, security_client: AsyncClient):
+    async def test_cross_role_override_without_lead_scope(
+        self, security_client: AsyncClient
+    ):
         """Security admin without audit-override privileges cannot perform analyst overrides."""
         admin_token = create_mock_jwt_token(
             roles=[SystemRole.SECURITY_ADMIN],
@@ -59,7 +61,9 @@ class TestCrossRoleAndCrossTenantDenial:
         )
         assert response.status_code in (403, 404, 422)
 
-    async def test_cross_tenant_assessment_read_denial(self, security_client: AsyncClient):
+    async def test_cross_tenant_assessment_read_denial(
+        self, security_client: AsyncClient
+    ):
         """Cross-tenant reading is rejected or isolated at boundary."""
         analyst_role = get_analyst_role()
         token_a = create_mock_jwt_token(
@@ -97,7 +101,9 @@ class TestCrossRoleAndCrossTenantDenial:
         else:
             assert res_a.status_code in (403, 404)
 
-    async def test_cross_tenant_policy_mutation_denial(self, security_client: AsyncClient):
+    async def test_cross_tenant_policy_mutation_denial(
+        self, security_client: AsyncClient
+    ):
         """Unprivileged or mismatched policy mutation requests are denied."""
         analyst_role = get_analyst_role()
         token = create_mock_jwt_token(

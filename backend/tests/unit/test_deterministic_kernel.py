@@ -115,21 +115,77 @@ class TestDeterministicKernelSpecification:
         ("b", "f", "s", "h", "expected_score", "expected_category"),
         [
             # Boundary Min
-            (Decimal("0.0"), Decimal("0.0"), Decimal("0.0"), Decimal("0.0"), Decimal("0.0"), RiskCategory.LOW),
+            (
+                Decimal("0.0"),
+                Decimal("0.0"),
+                Decimal("0.0"),
+                Decimal("0.0"),
+                Decimal("0.0"),
+                RiskCategory.LOW,
+            ),
             # Low Tier Threshold (Upper limit: 39.9)
-            (Decimal("39.0"), Decimal("39.0"), Decimal("39.0"), Decimal("39.0"), Decimal("39.0"), RiskCategory.LOW),
+            (
+                Decimal("39.0"),
+                Decimal("39.0"),
+                Decimal("39.0"),
+                Decimal("39.0"),
+                Decimal("39.0"),
+                RiskCategory.LOW,
+            ),
             # Medium Tier Threshold (Lower limit: 40.0)
-            (Decimal("40.0"), Decimal("40.0"), Decimal("40.0"), Decimal("40.0"), Decimal("40.0"), RiskCategory.MEDIUM),
+            (
+                Decimal("40.0"),
+                Decimal("40.0"),
+                Decimal("40.0"),
+                Decimal("40.0"),
+                Decimal("40.0"),
+                RiskCategory.MEDIUM,
+            ),
             # Medium Tier Threshold (Upper limit: 64.9)
-            (Decimal("64.0"), Decimal("64.0"), Decimal("64.0"), Decimal("64.0"), Decimal("64.0"), RiskCategory.MEDIUM),
+            (
+                Decimal("64.0"),
+                Decimal("64.0"),
+                Decimal("64.0"),
+                Decimal("64.0"),
+                Decimal("64.0"),
+                RiskCategory.MEDIUM,
+            ),
             # High Tier Threshold (Lower limit: 65.0)
-            (Decimal("65.0"), Decimal("65.0"), Decimal("65.0"), Decimal("65.0"), Decimal("65.0"), RiskCategory.HIGH),
+            (
+                Decimal("65.0"),
+                Decimal("65.0"),
+                Decimal("65.0"),
+                Decimal("65.0"),
+                Decimal("65.0"),
+                RiskCategory.HIGH,
+            ),
             # High Tier Spec Check (Canonical 83.5)
-            (Decimal("90.0"), Decimal("85.0"), Decimal("80.0"), Decimal("60.0"), Decimal("83.5"), RiskCategory.HIGH),
+            (
+                Decimal("90.0"),
+                Decimal("85.0"),
+                Decimal("80.0"),
+                Decimal("60.0"),
+                Decimal("83.5"),
+                RiskCategory.HIGH,
+            ),
             # Critical Tier Threshold (Lower limit: 85.0)
-            (Decimal("85.0"), Decimal("85.0"), Decimal("85.0"), Decimal("85.0"), Decimal("85.0"), RiskCategory.CRITICAL),
+            (
+                Decimal("85.0"),
+                Decimal("85.0"),
+                Decimal("85.0"),
+                Decimal("85.0"),
+                Decimal("85.0"),
+                RiskCategory.CRITICAL,
+            ),
             # Boundary Max
-            (Decimal("100.0"), Decimal("100.0"), Decimal("100.0"), Decimal("100.0"), Decimal("100.0"), RiskCategory.CRITICAL),
+            (
+                Decimal("100.0"),
+                Decimal("100.0"),
+                Decimal("100.0"),
+                Decimal("100.0"),
+                Decimal("100.0"),
+                RiskCategory.CRITICAL,
+            ),
         ],
     )
     def test_threshold_category_mappings(
@@ -145,7 +201,9 @@ class TestDeterministicKernelSpecification:
     ) -> None:
         """Verifies category boundaries across LOW, MEDIUM, HIGH, and CRITICAL."""
         components = RiskComponents(behavior=b, frequency=f, sensitivity=s, history=h)
-        result = scoring_kernel.calculate_from_components(components, spec_default_policy)
+        result = scoring_kernel.calculate_from_components(
+            components, spec_default_policy
+        )
 
         assert result.risk_score == expected_score
         assert result.rating == expected_category
@@ -161,7 +219,9 @@ class TestDeterministicKernelSpecification:
         Produces consistent, reproducible ratings across repeated simulation runs.
         """
         runs = [
-            scoring_kernel.calculate_from_components(spec_canonical_components, spec_default_policy)
+            scoring_kernel.calculate_from_components(
+                spec_canonical_components, spec_default_policy
+            )
             for _ in range(100)
         ]
 
@@ -298,4 +358,6 @@ class TestInvariantFailureModes:
         )
 
         with pytest.raises(InvariantViolationError, match="CORRELATION_ID_MISMATCH"):
-            invariant_verifier.verify_inputs(detection, investigation, spec_default_policy)
+            invariant_verifier.verify_inputs(
+                detection, investigation, spec_default_policy
+            )

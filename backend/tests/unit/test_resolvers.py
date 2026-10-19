@@ -97,7 +97,9 @@ class TestSpecificationDefaultThresholds:
         83.5 strictly resolves to HIGH.
         """
         canonical_score = Decimal("83.5")
-        category = category_resolver.resolve(score=canonical_score, policy=spec_default_policy)
+        category = category_resolver.resolve(
+            score=canonical_score, policy=spec_default_policy
+        )
         assert category == RiskCategory.HIGH
 
 
@@ -110,8 +112,14 @@ class TestBoundarySafetyClampingAndQuantization:
         spec_default_policy: RiskPolicy,
     ) -> None:
         """Ensures scores below 0.0 or above 100.0 clamp cleanly to LOW and CRITICAL."""
-        assert category_resolver.resolve(Decimal("-10.0"), policy=spec_default_policy) == RiskCategory.LOW
-        assert category_resolver.resolve(Decimal("150.0"), policy=spec_default_policy) == RiskCategory.CRITICAL
+        assert (
+            category_resolver.resolve(Decimal("-10.0"), policy=spec_default_policy)
+            == RiskCategory.LOW
+        )
+        assert (
+            category_resolver.resolve(Decimal("150.0"), policy=spec_default_policy)
+            == RiskCategory.CRITICAL
+        )
 
     @pytest.mark.parametrize(
         ("input_value", "expected_category"),
@@ -130,7 +138,9 @@ class TestBoundarySafetyClampingAndQuantization:
         expected_category: RiskCategory,
     ) -> None:
         """Verifies that strings, floats, and ints safely convert to Decimal without floating-point artifacts."""
-        resolved = category_resolver.resolve(Decimal(str(input_value)), policy=spec_default_policy)
+        resolved = category_resolver.resolve(
+            Decimal(str(input_value)), policy=spec_default_policy
+        )
         assert resolved == expected_category
 
     def test_invalid_score_rejection(
@@ -200,7 +210,10 @@ class TestCustomAndDynamicPolicyThresholds:
         assert resolved == RiskCategory.CRITICAL
 
         # 60.0 is MEDIUM in default, but HIGH in aggressive policy
-        assert category_resolver.resolve(Decimal("60.0"), policy=custom_policy) == RiskCategory.HIGH
+        assert (
+            category_resolver.resolve(Decimal("60.0"), policy=custom_policy)
+            == RiskCategory.HIGH
+        )
 
     def test_direct_threshold_config_argument_priority(
         self,
@@ -252,15 +265,27 @@ class TestCustomAndDynamicPolicyThresholds:
         """Ensures that gap-ridden or overlapping threshold profiles raise ValueError."""
         # Overlapping tiers
         overlapping_tiers: tuple[ThresholdTier, ...] = (
-            ThresholdTier(category=RiskCategory.LOW, min_score=Decimal("0.0"), max_score=Decimal("50.0")),
-            ThresholdTier(category=RiskCategory.HIGH, min_score=Decimal("45.0"), max_score=Decimal("100.0")),
+            ThresholdTier(
+                category=RiskCategory.LOW,
+                min_score=Decimal("0.0"),
+                max_score=Decimal("50.0"),
+            ),
+            ThresholdTier(
+                category=RiskCategory.HIGH,
+                min_score=Decimal("45.0"),
+                max_score=Decimal("100.0"),
+            ),
         )
         with pytest.raises(ValueError, match="Overlapping boundaries"):
             DynamicThresholdProfile(tiers=overlapping_tiers)
 
         # Non-zero start bound
         invalid_start_tiers: tuple[ThresholdTier, ...] = (
-            ThresholdTier(category=RiskCategory.LOW, min_score=Decimal("10.0"), max_score=Decimal("100.0")),
+            ThresholdTier(
+                category=RiskCategory.LOW,
+                min_score=Decimal("10.0"),
+                max_score=Decimal("100.0"),
+            ),
         )
         with pytest.raises(ValueError, match="must start at exactly 0.0"):
             DynamicThresholdProfile(tiers=invalid_start_tiers)

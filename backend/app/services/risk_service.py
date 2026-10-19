@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 Orchestration Service for End-to-End Cyber Risk Assessment.
 
@@ -8,7 +10,6 @@ Transaction ownership belongs to the API/request layer. This service flushes
 records but deliberately does not commit the caller's transaction.
 """
 
-from __future__ import annotations
 
 import json
 import logging
@@ -19,7 +20,11 @@ from typing import Any
 from uuid import UUID, uuid4
 
 import redis.asyncio as aioredis
-from opensearchpy import AsyncOpenSearch
+
+try:
+    from opensearchpy import AsyncOpenSearch
+except ImportError:
+    AsyncOpenSearch = None
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession

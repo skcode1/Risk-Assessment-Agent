@@ -29,6 +29,7 @@ pytestmark = pytest.mark.asyncio(loop_scope="session")
 
 class SystemRole:
     """Standard security operational roles defining tiered authorization boundaries."""
+
     SOC_ANALYST_TIER_1 = "ROLE_SOC_ANALYST_L1"
     SOC_ANALYST_TIER_2 = "ROLE_SOC_ANALYST_L2"
     SOC_LEAD = "ROLE_SOC_LEAD"
@@ -87,7 +88,9 @@ def sample_policy_payload() -> dict[str, object]:
 class TestAuthenticationAndTokenValidation:
     """Verifies baseline authentication requirements across protected risk endpoints."""
 
-    async def test_reject_unauthenticated_request(self, security_client: AsyncClient) -> None:
+    async def test_reject_unauthenticated_request(
+        self, security_client: AsyncClient
+    ) -> None:
         """Ensures requests without Bearer authorization tokens return 401 Unauthorized."""
         response = await security_client.get("/v1/risk-assessments")
         assert response.status_code == 401
@@ -104,7 +107,9 @@ class TestAuthenticationAndTokenValidation:
 class TestRiskAssessmentAccessPermissions:
     """Verifies fine-grained role scopes on reading and triggering risk assessments."""
 
-    async def test_tier1_analyst_can_read_assessment(self, security_client: AsyncClient) -> None:
+    async def test_tier1_analyst_can_read_assessment(
+        self, security_client: AsyncClient
+    ) -> None:
         """Verifies read privileges for Tier 1 analysts with assessments:read scope."""
         token = create_mock_jwt_token(
             roles=[SystemRole.SOC_ANALYST_TIER_1],
@@ -113,11 +118,15 @@ class TestRiskAssessmentAccessPermissions:
         headers = {"Authorization": f"Bearer {token}"}
         dummy_id = uuid4()
 
-        response = await security_client.get(f"/v1/risk-assessments/{dummy_id}", headers=headers)
+        response = await security_client.get(
+            f"/v1/risk-assessments/{dummy_id}", headers=headers
+        )
         # Endpoint exists and authorizes; 404 confirms the authorization gate passed
         assert response.status_code in (200, 404)
 
-    async def test_tier1_analyst_cannot_trigger_containment(self, security_client: AsyncClient) -> None:
+    async def test_tier1_analyst_cannot_trigger_containment(
+        self, security_client: AsyncClient
+    ) -> None:
         """
         Verifies that Tier 1 analysts cannot trigger containment workflows
         without elevated authorization.

@@ -21,6 +21,7 @@ import json
 import os
 from datetime import UTC, datetime
 from decimal import Decimal
+from typing import Self
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.core.config import settings
@@ -31,13 +32,16 @@ from app.domain.models.policy import RiskPolicy
 from app.workers.calibration_job import CalibrationJob, CalibrationResult
 from app.workers.cmdb_sync import CMDBsyncJob
 from app.workers.detection_consumer import DetectionConsumer
-from app.workers.opensearch_index import get_security_events_index_name, get_threat_intel_index_name
+from app.workers.opensearch_index import (
+    get_security_events_index_name,
+    get_threat_intel_index_name,
+)
 from app.workers.threat_intel_worker import ThreatIndicator
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _spec_policy() -> RiskPolicy:
     return RiskPolicy.create_spec_default(version="risk-policy-2026-01")
@@ -55,6 +59,7 @@ def _canonical_components() -> RiskComponents:
 # ---------------------------------------------------------------------------
 # Step 17 — OpenSearch index naming
 # ---------------------------------------------------------------------------
+
 
 class TestStep17OpenSearchIndexNaming:
     """Index names use OPENSEARCH_INDEX_PREFIX with monthly rollover."""
@@ -75,6 +80,7 @@ class TestStep17OpenSearchIndexNaming:
 # ---------------------------------------------------------------------------
 # Step 18 — Threat intel: kernel isolation
 # ---------------------------------------------------------------------------
+
 
 class TestStep18ThreatIntelKernelIsolation:
     """Threat intel enrichment must never modify the deterministic kernel score."""
@@ -119,6 +125,7 @@ class TestStep18ThreatIntelKernelIsolation:
 # Step 16 — Kafka detection consumer: sliding-window ZSET updates
 # ---------------------------------------------------------------------------
 
+
 class _FakePipeline:
     """Minimal async pipeline: records ops, then applies Redis ZSET semantics."""
 
@@ -126,7 +133,7 @@ class _FakePipeline:
         self._store = store
         self.ops: list[tuple] = []
 
-    async def __aenter__(self) -> "_FakePipeline":
+    async def __aenter__(self) -> Self:
         return self
 
     async def __aexit__(self, *exc: object) -> bool:
@@ -287,6 +294,7 @@ class TestStep16KafkaPublish:
 # Step 19 — Calibration job: PENDING_APPROVAL, never auto-activates
 # ---------------------------------------------------------------------------
 
+
 class _FakeResult:
     def scalar_one_or_none(self) -> None:
         return None
@@ -309,7 +317,7 @@ class _FakeDBSession:
     def __init__(self) -> None:
         self.added: list[object] = []
 
-    async def __aenter__(self) -> "_FakeDBSession":
+    async def __aenter__(self) -> Self:
         return self
 
     async def __aexit__(self, *exc: object) -> bool:
@@ -402,6 +410,7 @@ class TestStep19CalibrationPendingApproval:
 # Step 20 — CMDB sync: mocked inventory -> draft policy + cache invalidation
 # ---------------------------------------------------------------------------
 
+
 class TestStep20CMDBSync:
     """CMDB sync pulls inventory, drafts endpoint weights, invalidates cache."""
 
@@ -434,7 +443,9 @@ class TestStep20CMDBSync:
             ],
         }
 
-        with patch("httpx.AsyncClient.get", new=AsyncMock(return_value=mock_response)) as mock_get:
+        with patch(
+            "httpx.AsyncClient.get", new=AsyncMock(return_value=mock_response)
+        ) as mock_get:
             assets = await job.fetch_assets()
 
         assert len(assets) == 2
@@ -468,7 +479,9 @@ class TestStep20CMDBSync:
 
         assert draft.is_active is False  # draft only - requires approval
         assert "cmdb-sync" in draft.version
-        assert draft.endpoint_class_weights[EndpointClass.DATABASE_SERVER] == Decimal("92.5")
+        assert draft.endpoint_class_weights[EndpointClass.DATABASE_SERVER] == Decimal(
+            "92.5"
+        )
         # Classes not covered by the sync inherit current policy weights
         for ep, wt in current.endpoint_class_weights.items():
             if ep not in new_weights:

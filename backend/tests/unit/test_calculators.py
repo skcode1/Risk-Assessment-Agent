@@ -196,8 +196,12 @@ class TestSensitivityCalculator:
             event_frequency=1, endpoint_class=EndpointClass.WORKSTATION
         )
 
-        assert calculator.calculate(dc_inv, policy=spec_default_policy) == Decimal("95.0")
-        assert calculator.calculate(ws_inv, policy=spec_default_policy) == Decimal("40.0")
+        assert calculator.calculate(dc_inv, policy=spec_default_policy) == Decimal(
+            "95.0"
+        )
+        assert calculator.calculate(ws_inv, policy=spec_default_policy) == Decimal(
+            "40.0"
+        )
 
     def test_policy_endpoint_weight_overrides(self) -> None:
         """Verifies policy-configured asset sensitivity overrides take precedence over domain defaults."""
@@ -290,12 +294,20 @@ class TestHistoryCalculator:
 
         inv_3 = build_test_investigation(event_frequency=1, historical_incident_count=3)
         inv_5 = build_test_investigation(event_frequency=1, historical_incident_count=5)
-        inv_10 = build_test_investigation(event_frequency=1, historical_incident_count=10)
+        inv_10 = build_test_investigation(
+            event_frequency=1, historical_incident_count=10
+        )
 
         # 3 / 5 * 100 = 60.0
-        assert calculator.calculate(inv_3, policy=spec_default_policy) == Decimal("60.0")
-        assert calculator.calculate(inv_5, policy=spec_default_policy) == Decimal("100.0")
-        assert calculator.calculate(inv_10, policy=spec_default_policy) == Decimal("100.0")
+        assert calculator.calculate(inv_3, policy=spec_default_policy) == Decimal(
+            "60.0"
+        )
+        assert calculator.calculate(inv_5, policy=spec_default_policy) == Decimal(
+            "100.0"
+        )
+        assert calculator.calculate(inv_10, policy=spec_default_policy) == Decimal(
+            "100.0"
+        )
 
     def test_exponential_history_curve(self, spec_default_policy: RiskPolicy) -> None:
         """Verifies exponential curve accelerates penalty for repeat incident sources."""

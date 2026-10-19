@@ -25,7 +25,9 @@ def redis_container() -> RedisContainer:
 
 
 @pytest_asyncio.fixture
-async def redis_client(redis_container: RedisContainer) -> AsyncGenerator[aioredis.Redis, None]:
+async def redis_client(
+    redis_container: RedisContainer,
+) -> AsyncGenerator[aioredis.Redis, None]:
     """Provides a connected, isolated async Redis client with automatic test cleanup."""
     host = redis_container.get_container_host_ip()
     port = int(redis_container.get_exposed_port(6379))
@@ -111,7 +113,9 @@ class RedisIdempotencyLock:
         acquired = await self.client.set(key, "PROCESSING", ex=ttl_seconds, nx=True)
         return bool(acquired)
 
-    async def set_payload_hash(self, idempotency_key: str, payload_hash: str, ttl_seconds: int = 3600) -> None:
+    async def set_payload_hash(
+        self, idempotency_key: str, payload_hash: str, ttl_seconds: int = 3600
+    ) -> None:
         """Saves computed assessment fingerprint to return cached response on retry."""
         key = self._format_key(idempotency_key)
         await self.client.set(key, payload_hash, ex=ttl_seconds)
@@ -126,7 +130,9 @@ class RedisIdempotencyLock:
 class TestRedisSlidingWindowCounters:
     """Verifies temporal aggregation and sliding-window event counting."""
 
-    async def test_sliding_window_event_accumulation(self, redis_client: aioredis.Redis) -> None:
+    async def test_sliding_window_event_accumulation(
+        self, redis_client: aioredis.Redis
+    ) -> None:
         """Verifies events accumulate accurately within the sliding window."""
         counter = RedisSlidingWindowCounter(redis_client, key_prefix="telemetry")
         source_ip = "1.2.3.4"
@@ -144,10 +150,14 @@ class TestRedisSlidingWindowCounters:
             )
 
         assert count == 17
-        active_count = await counter.get_count(source_ip, metric, now + 5, window_seconds)
+        active_count = await counter.get_count(
+            source_ip, metric, now + 5, window_seconds
+        )
         assert active_count == 17
 
-    async def test_sliding_window_temporal_eviction(self, redis_client: aioredis.Redis) -> None:
+    async def test_sliding_window_temporal_eviction(
+        self, redis_client: aioredis.Redis
+    ) -> None:
         """Verifies timestamps outside the sliding window expire and are excluded from counts."""
         counter = RedisSlidingWindowCounter(redis_client, key_prefix="telemetry")
         source_ip = "192.168.1.50"
@@ -176,14 +186,20 @@ class TestRedisSlidingWindowCounters:
             )
 
         # Query at T=1009 (Window covers [999, 1009]) -> all 8 are valid
-        count_t9 = await counter.get_count(source_ip, metric, base_time + 9, window_seconds)
+        count_t9 = await counter.get_count(
+            source_ip, metric, base_time + 9, window_seconds
+        )
         assert count_t9 == 8
 
         # Query at T=1012 (Window covers [1002, 1012]) -> initial 5 events expired
-        count_t12 = await counter.get_count(source_ip, metric, base_time + 12, window_seconds)
+        count_t12 = await counter.get_count(
+            source_ip, metric, base_time + 12, window_seconds
+        )
         assert count_t12 == 3
 
-    async def test_concurrent_counter_increments(self, redis_client: aioredis.Redis) -> None:
+    async def test_concurrent_counter_increments(
+        self, redis_client: aioredis.Redis
+    ) -> None:
         """Ensures atomic execution under high-concurrency ingestion bursts."""
         counter = RedisSlidingWindowCounter(redis_client, key_prefix="concurrent")
         endpoint_id = "SRV-APP-01"
@@ -205,7 +221,9 @@ class TestRedisSlidingWindowCounters:
 
         await asyncio.gather(*tasks)
 
-        final_count = await counter.get_count(endpoint_id, metric, now + 1, window_seconds)
+        final_count = await counter.get_count(
+            endpoint_id, metric, now + 1, window_seconds
+        )
         assert final_count == total_concurrent_writes
 
 
@@ -213,7 +231,9 @@ class TestRedisSlidingWindowCounters:
 class TestRedisDeduplicationAndIdempotency:
     """Verifies idempotency locks, atomic token acquisition, and duplicate suppression."""
 
-    async def test_idempotent_lock_acquisition(self, redis_client: aioredis.Redis) -> None:
+    async def test_idempotent_lock_acquisition(
+        self, redis_client: aioredis.Redis
+    ) -> None:
         """Ensures identical idempotency keys are blocked on duplicate entry."""
         lock = RedisIdempotencyLock(redis_client)
         idempotency_key = f"idemp-{uuid4()}"
@@ -224,7 +244,9 @@ class TestRedisDeduplicationAndIdempotency:
         second_acquisition = await lock.acquire(idempotency_key, ttl_seconds=30)
         assert second_acquisition is False
 
-    async def test_idempotency_payload_caching(self, redis_client: aioredis.Redis) -> None:
+    async def test_idempotency_payload_caching(
+        self, redis_client: aioredis.Redis
+    ) -> None:
         """Verifies state updates persist for idempotent responses."""
         lock = RedisIdempotencyLock(redis_client)
         idempotency_key = f"evt-hash-{uuid4()}"

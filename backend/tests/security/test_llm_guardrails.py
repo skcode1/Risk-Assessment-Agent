@@ -36,7 +36,9 @@ class LLMGuardrailViolationError(ValueError):
     def __init__(self, rule_name: str, message: str, details: dict[str, Any]) -> None:
         self.rule_name = rule_name
         self.details = details
-        super().__init__(f"[{rule_name}] Guardrail Violation: {message} | Details: {details}")
+        super().__init__(
+            f"[{rule_name}] Guardrail Violation: {message} | Details: {details}"
+        )
 
 
 class ExplanationGuardrailValidator:
@@ -156,7 +158,9 @@ def authoritative_assessment(spec_default_policy: RiskPolicy) -> RiskAssessment:
 
 
 @pytest.fixture
-def explanation_request(authoritative_assessment: RiskAssessment) -> RiskExplanationRequest:
+def explanation_request(
+    authoritative_assessment: RiskAssessment,
+) -> RiskExplanationRequest:
     """Fixture providing input contract supplied to the explanation agent."""
     return RiskExplanationRequest(
         assessment_id=authoritative_assessment.assessment_id,
@@ -189,7 +193,9 @@ class TestLLMScoreImmutabilityGuardrails:
         tampered_score = Decimal("97.0")
         tampered_rating = RiskCategory.CRITICAL
 
-        with pytest.raises(LLMGuardrailViolationError, match="SCORE_MUTATION_FORBIDDEN"):
+        with pytest.raises(
+            LLMGuardrailViolationError, match="SCORE_MUTATION_FORBIDDEN"
+        ):
             ExplanationGuardrailValidator.enforce_immutable_score_boundary(
                 authoritative_assessment=authoritative_assessment,
                 tampered_score=tampered_score,
@@ -207,7 +213,9 @@ class TestLLMScoreImmutabilityGuardrails:
         identical_score = authoritative_assessment.risk_score
         tampered_rating = RiskCategory.LOW
 
-        with pytest.raises(LLMGuardrailViolationError, match="RATING_MUTATION_FORBIDDEN"):
+        with pytest.raises(
+            LLMGuardrailViolationError, match="RATING_MUTATION_FORBIDDEN"
+        ):
             ExplanationGuardrailValidator.enforce_immutable_score_boundary(
                 authoritative_assessment=authoritative_assessment,
                 tampered_score=identical_score,
@@ -242,7 +250,9 @@ class TestLLMScoreImmutabilityGuardrails:
             applied_policy=authoritative_assessment.applied_policy,
         )
 
-        with pytest.raises(InvariantViolationError, match="DETERMINISTIC_REPRODUCIBILITY_FAILURE"):
+        with pytest.raises(
+            InvariantViolationError, match="DETERMINISTIC_REPRODUCIBILITY_FAILURE"
+        ):
             verifier.verify_assessment(tampered_assessment, spec_default_policy)
 
 
@@ -263,7 +273,9 @@ class TestPromptInjectionAndHallucinationGuardrails:
             source=ExplanationSource.CONSTRAINED_LLM,
         )
 
-        with pytest.raises(LLMGuardrailViolationError, match="PROMPT_INJECTION_DETECTED"):
+        with pytest.raises(
+            LLMGuardrailViolationError, match="PROMPT_INJECTION_DETECTED"
+        ):
             ExplanationGuardrailValidator.validate_narrative_integrity(
                 request=explanation_request,
                 generated=malicious_response,
@@ -289,7 +301,9 @@ class TestPromptInjectionAndHallucinationGuardrails:
             source=ExplanationSource.CONSTRAINED_LLM,
         )
 
-        with pytest.raises(LLMGuardrailViolationError, match="HALLUCINATED_EVIDENCE_CITATION"):
+        with pytest.raises(
+            LLMGuardrailViolationError, match="HALLUCINATED_EVIDENCE_CITATION"
+        ):
             ExplanationGuardrailValidator.validate_narrative_integrity(
                 request=explanation_request,
                 generated=hallucinated_response,

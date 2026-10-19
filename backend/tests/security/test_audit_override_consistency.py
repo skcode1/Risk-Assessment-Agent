@@ -59,12 +59,18 @@ class TestAuditOverrideConsistency:
         await session.commit()
         return str(assessment_id)
 
-    async def test_successful_override_persists_audit_trail(self, security_client: AsyncClient):
+    async def test_successful_override_persists_audit_trail(
+        self, security_client: AsyncClient
+    ):
         """A valid override commits both the assessment override fields and the audit log entry."""
         async with async_session_factory() as session:
             assessment_id = await self._setup_seeded_assessment(session)
 
-        lead_role = getattr(SystemRole, "LEAD_ANALYST", getattr(SystemRole, "SECURITY_ADMIN", "security_admin"))
+        lead_role = getattr(
+            SystemRole,
+            "LEAD_ANALYST",
+            getattr(SystemRole, "SECURITY_ADMIN", "security_admin"),
+        )
         token = create_mock_jwt_token(
             roles=[lead_role],
             scopes=["assessments:override", "assessments:read", "assessments:write"],
@@ -89,19 +95,25 @@ class TestAuditOverrideConsistency:
                 headers=headers,
             )
 
-        assert response.status_code in (200, 201), f"Unexpected status: {response.status_code}, Body: {response.text}"
+        assert response.status_code in (200, 201), (
+            f"Unexpected status: {response.status_code}, Body: {response.text}"
+        )
 
         # Post-Request Database State Verification
         async with async_session_factory() as session:
             assessment_stmt = select(RiskAssessmentModel).where(
                 RiskAssessmentModel.assessment_id == assessment_id
             )
-            updated_assessment = (await session.execute(assessment_stmt)).scalars().first()
+            updated_assessment = (
+                (await session.execute(assessment_stmt)).scalars().first()
+            )
             assert updated_assessment is not None
 
             # Check override_rating field
             ov_rating = updated_assessment.override_rating
-            ov_rating_val = ov_rating.value if hasattr(ov_rating, "value") else str(ov_rating)
+            ov_rating_val = (
+                ov_rating.value if hasattr(ov_rating, "value") else str(ov_rating)
+            )
             assert ov_rating_val == "LOW"
 
             # Check override_score field
@@ -109,31 +121,53 @@ class TestAuditOverrideConsistency:
                 assert float(updated_assessment.override_score) == 15.0
 
             # Verify audit trail record
-            audit_stmt = select(AuditLogModel).where(AuditLogModel.assessment_id == assessment_id)
+            audit_stmt = select(AuditLogModel).where(
+                AuditLogModel.assessment_id == assessment_id
+            )
             audit_record = (await session.execute(audit_stmt)).scalars().first()
             assert audit_record is not None
             assert audit_record.action == "ANALYST_SCORE_OVERRIDE"
 
             details_str = str(audit_record.details) if audit_record.details else ""
             assert payload["justification"] in details_str or (
-                isinstance(audit_record.details, dict) and audit_record.details.get("justification") == payload["justification"]
+                isinstance(audit_record.details, dict)
+                and audit_record.details.get("justification")
+                == payload["justification"]
             )
 
-    async def test_failed_override_leaves_no_inconsistent_state(self, security_client: AsyncClient):
+    async def test_failed_override_leaves_no_inconsistent_state(
+        self, security_client: AsyncClient
+    ):
         """A rejected override rolls back cleanly, leaving original score intact and no orphan audit entries."""
         async with async_session_factory() as session:
             assessment_id = await self._setup_seeded_assessment(session)
 
-            initial_assessment = (await session.execute(
-                select(RiskAssessmentModel).where(RiskAssessmentModel.assessment_id == assessment_id)
-            )).scalars().first()
+            initial_assessment = (
+                (
+                    await session.execute(
+                        select(RiskAssessmentModel).where(
+                            RiskAssessmentModel.assessment_id == assessment_id
+                        )
+                    )
+                )
+                .scalars()
+                .first()
+            )
             initial_rating = initial_assessment.rating
             initial_score = initial_assessment.risk_score
 
-            audit_count_stmt = select(func.count(AuditLogModel.id)).where(AuditLogModel.assessment_id == assessment_id)
-            initial_audit_count = (await session.execute(audit_count_stmt)).scalar() or 0
+            audit_count_stmt = select(func.count(AuditLogModel.id)).where(
+                AuditLogModel.assessment_id == assessment_id
+            )
+            initial_audit_count = (
+                await session.execute(audit_count_stmt)
+            ).scalar() or 0
 
-        lead_role = getattr(SystemRole, "LEAD_ANALYST", getattr(SystemRole, "SECURITY_ADMIN", "security_admin"))
+        lead_role = getattr(
+            SystemRole,
+            "LEAD_ANALYST",
+            getattr(SystemRole, "SECURITY_ADMIN", "security_admin"),
+        )
         token = create_mock_jwt_token(
             roles=[lead_role],
             scopes=["assessments:override"],
@@ -161,10 +195,18 @@ class TestAuditOverrideConsistency:
 
         # Verify DB remained unchanged
         async with async_session_factory() as session:
-            persisted_assessment = (await session.execute(
-                select(RiskAssessmentModel).where(RiskAssessmentModel.assessment_id == assessment_id)
-            )).scalars().first()
-            
+            persisted_assessment = (
+                (
+                    await session.execute(
+                        select(RiskAssessmentModel).where(
+                            RiskAssessmentModel.assessment_id == assessment_id
+                        )
+                    )
+                )
+                .scalars()
+                .first()
+            )
+
             assert persisted_assessment.rating == initial_rating
             assert persisted_assessment.risk_score == initial_score
             assert persisted_assessment.override_rating is None

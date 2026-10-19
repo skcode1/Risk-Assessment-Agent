@@ -5,7 +5,8 @@ Independent mathematical verification of the core scoring kernel:
 R = 0.4B + 0.3F + 0.2S + 0.1H
 """
 
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
+
 import pytest
 
 from app.domain.engine.kernel import DeterministicRiskScoringKernel
@@ -27,7 +28,9 @@ def standard_policy() -> RiskPolicy:
         CategoryThresholdRange(RiskCategory.LOW, Decimal("0.0"), Decimal("39.9")),
         CategoryThresholdRange(RiskCategory.MEDIUM, Decimal("40.0"), Decimal("64.9")),
         CategoryThresholdRange(RiskCategory.HIGH, Decimal("65.0"), Decimal("84.9")),
-        CategoryThresholdRange(RiskCategory.CRITICAL, Decimal("85.0"), Decimal("100.0")),
+        CategoryThresholdRange(
+            RiskCategory.CRITICAL, Decimal("85.0"), Decimal("100.0")
+        ),
     )
     return RiskPolicy(
         name="Authoritative Baseline Verification Policy",
@@ -56,16 +59,73 @@ def kernel() -> DeterministicRiskScoringKernel:
 # 1. 7 Authoritative Input/Output Matrix Test Cases
 # ============================================================================
 
+
 @pytest.mark.parametrize(
     "case_name, b, f, s, h, expected_score, expected_category",
     [
-        ("Minimum", Decimal("0.0"), Decimal("0.0"), Decimal("0.0"), Decimal("0.0"), Decimal("0.0"), RiskCategory.LOW),
-        ("Low", Decimal("20.0"), Decimal("20.0"), Decimal("20.0"), Decimal("20.0"), Decimal("20.0"), RiskCategory.LOW),
-        ("Medium", Decimal("50.0"), Decimal("50.0"), Decimal("50.0"), Decimal("50.0"), Decimal("50.0"), RiskCategory.MEDIUM),
-        ("High", Decimal("70.0"), Decimal("70.0"), Decimal("70.0"), Decimal("70.0"), Decimal("70.0"), RiskCategory.HIGH),
-        ("Critical", Decimal("90.0"), Decimal("90.0"), Decimal("90.0"), Decimal("90.0"), Decimal("90.0"), RiskCategory.CRITICAL),
-        ("Mixed", Decimal("90.0"), Decimal("85.0"), Decimal("80.0"), Decimal("60.0"), Decimal("83.5"), RiskCategory.HIGH),
-        ("Boundary", Decimal("85.0"), Decimal("85.0"), Decimal("85.0"), Decimal("85.0"), Decimal("85.0"), RiskCategory.CRITICAL),
+        (
+            "Minimum",
+            Decimal("0.0"),
+            Decimal("0.0"),
+            Decimal("0.0"),
+            Decimal("0.0"),
+            Decimal("0.0"),
+            RiskCategory.LOW,
+        ),
+        (
+            "Low",
+            Decimal("20.0"),
+            Decimal("20.0"),
+            Decimal("20.0"),
+            Decimal("20.0"),
+            Decimal("20.0"),
+            RiskCategory.LOW,
+        ),
+        (
+            "Medium",
+            Decimal("50.0"),
+            Decimal("50.0"),
+            Decimal("50.0"),
+            Decimal("50.0"),
+            Decimal("50.0"),
+            RiskCategory.MEDIUM,
+        ),
+        (
+            "High",
+            Decimal("70.0"),
+            Decimal("70.0"),
+            Decimal("70.0"),
+            Decimal("70.0"),
+            Decimal("70.0"),
+            RiskCategory.HIGH,
+        ),
+        (
+            "Critical",
+            Decimal("90.0"),
+            Decimal("90.0"),
+            Decimal("90.0"),
+            Decimal("90.0"),
+            Decimal("90.0"),
+            RiskCategory.CRITICAL,
+        ),
+        (
+            "Mixed",
+            Decimal("90.0"),
+            Decimal("85.0"),
+            Decimal("80.0"),
+            Decimal("60.0"),
+            Decimal("83.5"),
+            RiskCategory.HIGH,
+        ),
+        (
+            "Boundary",
+            Decimal("85.0"),
+            Decimal("85.0"),
+            Decimal("85.0"),
+            Decimal("85.0"),
+            Decimal("85.0"),
+            RiskCategory.CRITICAL,
+        ),
     ],
 )
 def test_authoritative_scoring_matrix(
@@ -88,15 +148,20 @@ def test_authoritative_scoring_matrix(
         + (standard_policy.weights.history * components.history)
     ).quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
 
-    assert calculated_score == expected_score, f"{case_name} failed score computation: {calculated_score} != {expected_score}"
+    assert calculated_score == expected_score, (
+        f"{case_name} failed score computation: {calculated_score} != {expected_score}"
+    )
 
     resolved_category = resolver.resolve(calculated_score, policy=standard_policy)
-    assert resolved_category == expected_category, f"{case_name} failed category resolution: {resolved_category} != {expected_category}"
+    assert resolved_category == expected_category, (
+        f"{case_name} failed category resolution: {resolved_category} != {expected_category}"
+    )
 
 
 # ============================================================================
 # 2. Strict Threshold Boundary Invariance Checks
 # ============================================================================
+
 
 @pytest.mark.parametrize(
     "boundary_score, expected_category",
@@ -111,7 +176,10 @@ def test_authoritative_scoring_matrix(
         (Decimal("84.0"), RiskCategory.HIGH),
         (Decimal("84.9"), RiskCategory.HIGH),
         (Decimal("85.0"), RiskCategory.CRITICAL),
-        (Decimal("87.0"), RiskCategory.CRITICAL),  # Conflict check: 87 must resolve to CRITICAL
+        (
+            Decimal("87.0"),
+            RiskCategory.CRITICAL,
+        ),  # Conflict check: 87 must resolve to CRITICAL
         (Decimal("100.0"), RiskCategory.CRITICAL),
     ],
 )
@@ -122,12 +190,15 @@ def test_threshold_boundary_transitions(
     expected_category: RiskCategory,
 ):
     resolved = resolver.resolve(boundary_score, policy=standard_policy)
-    assert resolved == expected_category, f"Score {boundary_score} resolved to {resolved}, expected {expected_category}"
+    assert resolved == expected_category, (
+        f"Score {boundary_score} resolved to {resolved}, expected {expected_category}"
+    )
 
 
 # ============================================================================
 # 3. Invalid Ranges, Types, Non-Numeric, and Rejection Checks
 # ============================================================================
+
 
 @pytest.mark.parametrize(
     "b, f, s, h",
@@ -174,6 +245,7 @@ def test_reject_invalid_subscore_types(invalid_val):
 # 4. Deterministic Idempotence Check
 # ============================================================================
 
+
 def test_repeated_scoring_invariance(
     standard_policy: RiskPolicy,
     resolver: DynamicRiskCategoryResolver,
@@ -198,7 +270,11 @@ def test_repeated_scoring_invariance(
         scores.append(score)
         ratings.append(category)
 
-    assert len(set(scores)) == 1, "Idempotence failed: floating variance detected in score calculation"
-    assert len(set(ratings)) == 1, "Idempotence failed: variance detected in rating resolution"
+    assert len(set(scores)) == 1, (
+        "Idempotence failed: floating variance detected in score calculation"
+    )
+    assert len(set(ratings)) == 1, (
+        "Idempotence failed: variance detected in rating resolution"
+    )
     assert scores[0] == Decimal("74.7")
     assert ratings[0] == RiskCategory.HIGH

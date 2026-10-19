@@ -25,15 +25,17 @@ import app.db.models.audit
 import app.db.models.detection
 import app.db.models.explanation
 import app.db.models.investigation
-import app.db.models.policy
+import app.db.models.policy  # noqa: F401
+
+# Import ORM models so all tables and relationships are registered
 from app.core.config import settings
 from app.core.database import Base, get_db_session
 from app.core.redis import get_redis_client
 
-
 # ---------------------------------------------------------------------------
 # Container fixtures (module-scoped for performance)
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture(scope="module")
 def postgres_container() -> PostgresContainer:
@@ -60,6 +62,7 @@ def redis_container() -> RedisContainer:
 # ---------------------------------------------------------------------------
 # Database fixtures
 # ---------------------------------------------------------------------------
+
 
 def _async_database_url(container: PostgresContainer) -> str:
     """Convert the Testcontainers PostgreSQL URL to the asyncpg driver URL."""
@@ -112,9 +115,10 @@ async def async_db_session(
         # Create the complete schema.
         async with engine.begin() as connection:
             await connection.run_sync(Base.metadata.create_all)
-            
+
             # Create append-only trigger for audit_logs
-            await connection.execute(text("""
+            await connection.execute(
+                text("""
                 CREATE OR REPLACE FUNCTION trg_enforce_audit_logs_append_only()
                 RETURNS TRIGGER LANGUAGE plpgsql AS $func$
                 BEGIN
@@ -122,14 +126,17 @@ async def async_db_session(
                     USING ERRCODE = '55000';
                 END;
                 $func$;
-            """))
-            
-            await connection.execute(text("""
+            """)
+            )
+
+            await connection.execute(
+                text("""
                 CREATE TRIGGER trg_audit_logs_append_only
                 BEFORE UPDATE OR DELETE ON audit_logs
                 FOR EACH ROW
                 EXECUTE FUNCTION trg_enforce_audit_logs_append_only();
-            """))
+            """)
+            )
 
         session_factory = async_sessionmaker(
             bind=engine,
@@ -139,11 +146,12 @@ async def async_db_session(
 
         async with session_factory() as session:
             # Seed baseline policy
-            from app.domain.models.policy import RiskPolicy
             from app.db.models.policy import PolicyModel
-            from app.domain.models.enums import EndpointClass
+            from app.domain.models.policy import RiskPolicy
 
-            domain_policy = RiskPolicy.create_spec_default(version="risk-policy-2026-01")
+            domain_policy = RiskPolicy.create_spec_default(
+                version="risk-policy-2026-01"
+            )
             weights = domain_policy.weights
             thresholds = domain_policy.thresholds
 
@@ -190,6 +198,7 @@ async def async_db_session(
 # Redis fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest_asyncio.fixture
 async def async_redis(
     redis_container: RedisContainer,
@@ -212,25 +221,31 @@ async def async_redis(
 # Dependency override fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def override_get_db_session(async_db_session: AsyncSession):
     """Override get_db_session dependency with test session."""
+
     async def _override() -> AsyncGenerator[AsyncSession, None]:
         yield async_db_session
+
     return _override
 
 
 @pytest.fixture
 def override_get_redis_client(async_redis: aioredis.Redis):
     """Override get_redis_client dependency with test Redis client."""
+
     async def _override() -> AsyncGenerator[aioredis.Redis, None]:
         yield async_redis
+
     return _override
 
 
 # ---------------------------------------------------------------------------
 # Authenticated API client fixture
 # ---------------------------------------------------------------------------
+
 
 @pytest_asyncio.fixture
 async def api_client(
@@ -240,11 +255,12 @@ async def api_client(
     """
     Create an authenticated ASGI test client with isolated dependencies.
     """
-    from app.main import app
-    from fastapi.encoders import jsonable_encoder
+    from datetime import UTC, datetime
+
     from httpx import ASGITransport, AsyncClient
     from jose import jwt
-    from datetime import UTC, datetime
+
+    from app.main import app
 
     previous_overrides = app.dependency_overrides.copy()
 
@@ -296,11 +312,12 @@ async def api_client(
 # Environment fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(autouse=True)
 def clean_env():
     """Ensure clean environment for each test."""
     # Clear test-specific env vars
-    test_vars = [k for k in os.environ.keys() if k.startswith("TEST_")]
+    test_vars = [k for k in os.environ if k.startswith("TEST_")]
     old_values = {k: os.environ[k] for k in test_vars}
     for k in test_vars:
         del os.environ[k]
@@ -316,11 +333,17 @@ def clean_env():
 # Canonical test payload
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def canonical_spec_payload() -> dict[str, Any]:
     """Build the canonical risk-assessment request matching 6.3 spec."""
     from uuid import uuid4
-    from app.domain.models.enums import DetectionSourceType, DetectionSeverity, EndpointClass
+
+    from app.domain.models.enums import (
+        DetectionSeverity,
+        DetectionSourceType,
+        EndpointClass,
+    )
 
     correlation_id = str(uuid4())
     event_id = str(uuid4())

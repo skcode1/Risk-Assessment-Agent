@@ -14,7 +14,7 @@ from app.core.config import settings
 from app.core.database import Base
 
 # Preload all model modules so Base.metadata is fully populated for autogenerate
-from app.db.models import (
+from app.db.models import (  # noqa: F401
     assessment,
     audit,
     detection,
@@ -66,7 +66,7 @@ def do_run_migrations(connection: Connection) -> None:
 async def run_async_migrations() -> None:
     """Run migrations in 'online' mode with SQLAlchemy async engine."""
     configuration = config.get_section(config.config_ini_section, {}) or {}
-    
+
     # Dynamically inject the runtime connection URL from AppSettings
     configuration["sqlalchemy.url"] = str(settings.db.ASYNC_DATABASE_URI)
 

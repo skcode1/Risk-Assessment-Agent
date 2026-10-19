@@ -6,19 +6,20 @@ against the native FastAPI ASGI application, fully aligned with app.domain.model
 """
 
 import asyncio
-from decimal import Decimal, ROUND_HALF_UP
 import json
+from decimal import ROUND_HALF_UP, Decimal
 from uuid import uuid4
 
 from httpx import ASGITransport, AsyncClient
-from app.main import app
+
 from app.domain.models.enums import (
     DetectionSeverity,
     DetectionSourceType,
     EndpointClass,
     RiskCategory,
 )
-from tests.security.test_rbac import create_mock_jwt_token, SystemRole
+from app.main import app
+from tests.security.test_rbac import SystemRole, create_mock_jwt_token
 
 # Authenticated token with write & read scopes
 AUTH_TOKEN = create_mock_jwt_token(
@@ -31,7 +32,9 @@ HEADERS = {
 }
 
 
-def verify_formula_and_category(components: dict, reported_score: float, reported_rating: str) -> None:
+def verify_formula_and_category(
+    components: dict, reported_score: float, reported_rating: str
+) -> None:
     """Verifies that R = 0.4B + 0.3F + 0.2S + 0.1H strictly holds within 0.1 decimal rounding."""
     b = Decimal(str(components.get("behavior", 0.0)))
     f = Decimal(str(components.get("frequency", 0.0)))
@@ -44,7 +47,9 @@ def verify_formula_and_category(components: dict, reported_score: float, reporte
         + (Decimal("0.2") * s)
         + (Decimal("0.1") * h)
     ).quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
-    actual_score = Decimal(str(reported_score)).quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
+    actual_score = Decimal(str(reported_score)).quantize(
+        Decimal("0.1"), rounding=ROUND_HALF_UP
+    )
 
     assert expected_score == actual_score, (
         f"Formula Mismatch: 0.4({b}) + 0.3({f}) + 0.2({s}) + 0.1({h}) = "
@@ -101,7 +106,6 @@ async def run_scenario(client: AsyncClient, name: str, payload: dict) -> dict:
 async def main():
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://testserver") as client:
-
         # ----------------------------------------------------------------------
         # Scenario A: Repeated Failed Logins (Brute Force / Password Spray)
         # Using DetectionSourceType.SIEM and EndpointClass.INTERNAL_SERVER
@@ -136,7 +140,9 @@ async def main():
                 ],
             },
         }
-        await run_scenario(client, "Scenario A: Repeated Failed Logins", scenario_a_payload)
+        await run_scenario(
+            client, "Scenario A: Repeated Failed Logins", scenario_a_payload
+        )
 
         # ----------------------------------------------------------------------
         # Scenario B: Suspected Lateral Movement
@@ -180,7 +186,9 @@ async def main():
                 ],
             },
         }
-        await run_scenario(client, "Scenario B: Suspected Lateral Movement", scenario_b_payload)
+        await run_scenario(
+            client, "Scenario B: Suspected Lateral Movement", scenario_b_payload
+        )
 
         # ----------------------------------------------------------------------
         # Scenario C: Suspicious Executable / Malware Alert
@@ -215,7 +223,9 @@ async def main():
                 ],
             },
         }
-        await run_scenario(client, "Scenario C: Malware / Code Injection Alert", scenario_c_payload)
+        await run_scenario(
+            client, "Scenario C: Malware / Code Injection Alert", scenario_c_payload
+        )
 
         # ----------------------------------------------------------------------
         # Scenario D: Web Application Attack (SQLi / WAF Alert)
@@ -251,13 +261,17 @@ async def main():
                 ],
             },
         }
-        res_d = await run_scenario(client, "Scenario D: Web App Injection Attempt", scenario_d_payload)
+        res_d = await run_scenario(
+            client, "Scenario D: Web App Injection Attempt", scenario_d_payload
+        )
 
         # Verify raw payload isolation in response
         assert "1' OR '1'='1" not in json.dumps(res_d), (
             "Safety Violation: Raw exploit payload leaked in assessment response!"
         )
-        print("  🔒 Payload hygiene verified: Exploit payload is not reflected in assessment output.")
+        print(
+            "  🔒 Payload hygiene verified: Exploit payload is not reflected in assessment output."
+        )
 
         # ----------------------------------------------------------------------
         # Scenario E: Repeat Offender Differential History Check
@@ -351,7 +365,9 @@ async def main():
         assert abs(actual_score_delta - expected_score_delta) <= Decimal("0.1"), (
             "Score shift does not match the 0.1 weight contribution!"
         )
-        print("  ✅ Differential calculation verified: Only history shifted the final score.")
+        print(
+            "  ✅ Differential calculation verified: Only history shifted the final score."
+        )
 
     print("\n🎉 ALL 5 PRODUCTION SCENARIOS PASSED FULL MATHEMATICAL VERIFICATION!")
 

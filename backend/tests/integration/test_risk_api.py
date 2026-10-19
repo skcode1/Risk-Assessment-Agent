@@ -26,6 +26,7 @@ BASELINE_POLICY_VERSION = "risk-policy-2026-01"
 # Integration tests
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 class TestRiskAssessmentApiEndpoints:
     """End-to-end tests for assessment creation, idempotency, and retrieval."""
@@ -59,15 +60,9 @@ class TestRiskAssessmentApiEndpoints:
         assert Decimal(str(components["sensitivity"])) == Decimal("80.0")
         assert Decimal(str(components["history"])) == Decimal("60.0")
 
-        assert data.get("assessment_id"), (
-            f"Response is missing assessment_id: {data}"
-        )
-        assert data.get("applied_policy"), (
-            f"Response is missing applied_policy: {data}"
-        )
-        assert (
-            data["applied_policy"]["version"] == BASELINE_POLICY_VERSION
-        )
+        assert data.get("assessment_id"), f"Response is missing assessment_id: {data}"
+        assert data.get("applied_policy"), f"Response is missing applied_policy: {data}"
+        assert data["applied_policy"]["version"] == BASELINE_POLICY_VERSION
 
     async def test_idempotent_repeated_requests(
         self,
@@ -139,9 +134,7 @@ class TestRiskAssessmentApiEndpoints:
             f"Creation response is missing assessment_id: {create_data}"
         )
 
-        get_response = await api_client.get(
-            f"/v1/risk-assessments/{assessment_id}"
-        )
+        get_response = await api_client.get(f"/v1/risk-assessments/{assessment_id}")
 
         assert get_response.status_code == 200, (
             f"Assessment retrieval failed: "
@@ -160,9 +153,7 @@ class TestRiskAssessmentApiEndpoints:
         canonical_spec_payload,
     ) -> None:
         """Reject a malformed correlation UUID with HTTP 422."""
-        canonical_spec_payload["detection_event"]["correlation_id"] = (
-            "not-a-valid-uuid"
-        )
+        canonical_spec_payload["detection_event"]["correlation_id"] = "not-a-valid-uuid"
 
         response = await api_client.post(
             "/v1/risk-assessments",

@@ -8,11 +8,13 @@ pipeline and that authority flows through versioned RiskPolicy configuration.
 from decimal import Decimal
 from uuid import uuid4
 
-import pytest
-
 from app.domain.engine.calculators.frequency import DynamicFrequencyCalculator
 from app.domain.engine.calculators.sensitivity import DynamicSensitivityCalculator
-from app.domain.models.assessment import AppliedPolicySnapshot, RiskAssessment, RiskComponents
+from app.domain.models.assessment import (
+    AppliedPolicySnapshot,
+    RiskAssessment,
+    RiskComponents,
+)
 from app.domain.models.enums import EndpointClass, RiskCategory
 from app.domain.models.investigation import (
     InvestigationResult,
@@ -37,10 +39,26 @@ def _custom_low_0_29_policy() -> RiskPolicy:
     )
     thresholds = ThresholdConfig(
         tiers=(
-            CategoryThresholdRange(category=RiskCategory.LOW, min_score=Decimal("0.0"), max_score=Decimal("29.9")),
-            CategoryThresholdRange(category=RiskCategory.MEDIUM, min_score=Decimal("30.0"), max_score=Decimal("59.9")),
-            CategoryThresholdRange(category=RiskCategory.HIGH, min_score=Decimal("60.0"), max_score=Decimal("79.9")),
-            CategoryThresholdRange(category=RiskCategory.CRITICAL, min_score=Decimal("80.0"), max_score=Decimal("100.0")),
+            CategoryThresholdRange(
+                category=RiskCategory.LOW,
+                min_score=Decimal("0.0"),
+                max_score=Decimal("29.9"),
+            ),
+            CategoryThresholdRange(
+                category=RiskCategory.MEDIUM,
+                min_score=Decimal("30.0"),
+                max_score=Decimal("59.9"),
+            ),
+            CategoryThresholdRange(
+                category=RiskCategory.HIGH,
+                min_score=Decimal("60.0"),
+                max_score=Decimal("79.9"),
+            ),
+            CategoryThresholdRange(
+                category=RiskCategory.CRITICAL,
+                min_score=Decimal("80.0"),
+                max_score=Decimal("100.0"),
+            ),
         )
     )
     return RiskPolicy(
@@ -58,10 +76,26 @@ def _custom_low_0_29_policy() -> RiskPolicy:
 def _spec_thresholds() -> ThresholdConfig:
     return ThresholdConfig(
         tiers=(
-            CategoryThresholdRange(category=RiskCategory.LOW, min_score=Decimal("0.0"), max_score=Decimal("39.9")),
-            CategoryThresholdRange(category=RiskCategory.MEDIUM, min_score=Decimal("40.0"), max_score=Decimal("64.9")),
-            CategoryThresholdRange(category=RiskCategory.HIGH, min_score=Decimal("65.0"), max_score=Decimal("84.9")),
-            CategoryThresholdRange(category=RiskCategory.CRITICAL, min_score=Decimal("85.0"), max_score=Decimal("100.0")),
+            CategoryThresholdRange(
+                category=RiskCategory.LOW,
+                min_score=Decimal("0.0"),
+                max_score=Decimal("39.9"),
+            ),
+            CategoryThresholdRange(
+                category=RiskCategory.MEDIUM,
+                min_score=Decimal("40.0"),
+                max_score=Decimal("64.9"),
+            ),
+            CategoryThresholdRange(
+                category=RiskCategory.HIGH,
+                min_score=Decimal("65.0"),
+                max_score=Decimal("84.9"),
+            ),
+            CategoryThresholdRange(
+                category=RiskCategory.CRITICAL,
+                min_score=Decimal("85.0"),
+                max_score=Decimal("100.0"),
+            ),
         )
     )
 
@@ -78,11 +112,16 @@ def _snapshot(policy: RiskPolicy) -> AppliedPolicySnapshot:
         },
         thresholds={
             "tiers": [
-                {"category": t.category.value, "min_score": str(t.min_score), "max_score": str(t.max_score)}
+                {
+                    "category": t.category.value,
+                    "min_score": str(t.min_score),
+                    "max_score": str(t.max_score),
+                }
                 for t in policy.thresholds.tiers
             ]
         },
     )
+
 
 class TestStep10RatingFromPolicy:
     """Rating must resolve from the active policy, never from hardcoded branches."""

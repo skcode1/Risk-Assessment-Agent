@@ -3,20 +3,20 @@ Audit Log Immutability Tests.
 Verifies that the append-only trigger rejects UPDATE and DELETE operations on audit_logs.
 """
 
+from datetime import UTC, datetime
+from decimal import Decimal
+from uuid import uuid4
+
 import pytest
 import pytest_asyncio
-from uuid import uuid4
-from datetime import UTC, datetime
-
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError, OperationalError, ProgrammingError
 
-from app.db.models.audit import AuditLogModel
 from app.db.models.assessment import RiskAssessmentModel
+from app.db.models.audit import AuditLogModel
 from app.db.models.detection import DetectionModel
 from app.db.models.policy import PolicyModel
-from app.domain.models.enums import RiskCategory, DetectionSeverity, DetectionSourceType
-from decimal import Decimal
+from app.domain.models.enums import DetectionSeverity, DetectionSourceType, RiskCategory
 
 
 @pytest.mark.asyncio
@@ -78,7 +78,9 @@ class TestAuditLogImmutability:
         return policy
 
     @pytest_asyncio.fixture
-    async def sample_assessment(self, async_db_session, sample_detection, sample_policy):
+    async def sample_assessment(
+        self, async_db_session, sample_detection, sample_policy
+    ):
         """Create a sample risk assessment for foreign key reference."""
         assessment = RiskAssessmentModel(
             assessment_id=uuid4(),
@@ -92,8 +94,21 @@ class TestAuditLogImmutability:
             frequency_score=Decimal("85.0"),
             sensitivity_score=Decimal("80.0"),
             history_score=Decimal("60.0"),
-            components_snapshot={"behavior": 90.0, "frequency": 85.0, "sensitivity": 80.0, "history": 60.0},
-            applied_policy_snapshot={"version": "risk-policy-2026-01", "weights": {"behavior": 0.4, "frequency": 0.3, "sensitivity": 0.2, "history": 0.1}},
+            components_snapshot={
+                "behavior": 90.0,
+                "frequency": 85.0,
+                "sensitivity": 80.0,
+                "history": 60.0,
+            },
+            applied_policy_snapshot={
+                "version": "risk-policy-2026-01",
+                "weights": {
+                    "behavior": 0.4,
+                    "frequency": 0.3,
+                    "sensitivity": 0.2,
+                    "history": 0.1,
+                },
+            },
             created_at=datetime.now(UTC),
         )
         async_db_session.add(assessment)
@@ -145,7 +160,9 @@ class TestAuditLogImmutability:
         audit_id = sample_audit_log.id
 
         # Attempt UPDATE
-        with pytest.raises((DBAPIError, OperationalError, ProgrammingError)) as exc_info:
+        with pytest.raises(
+            (DBAPIError, OperationalError, ProgrammingError)
+        ) as exc_info:
             await async_db_session.execute(
                 text("UPDATE audit_logs SET action = 'MODIFIED' WHERE id = :audit_id"),
                 {"audit_id": str(audit_id)},
@@ -153,7 +170,9 @@ class TestAuditLogImmutability:
 
         # Verify the error is from the trigger
         error_msg = str(exc_info.value).lower()
-        assert "append-only" in error_msg or "trigger" in error_msg or "55000" in error_msg
+        assert (
+            "append-only" in error_msg or "trigger" in error_msg or "55000" in error_msg
+        )
 
         # Rollback the aborted transaction
         await async_db_session.rollback()
@@ -170,7 +189,9 @@ class TestAuditLogImmutability:
         audit_id = sample_audit_log.id
 
         # Attempt DELETE
-        with pytest.raises((DBAPIError, OperationalError, ProgrammingError)) as exc_info:
+        with pytest.raises(
+            (DBAPIError, OperationalError, ProgrammingError)
+        ) as exc_info:
             await async_db_session.execute(
                 text("DELETE FROM audit_logs WHERE id = :audit_id"),
                 {"audit_id": str(audit_id)},
@@ -178,7 +199,9 @@ class TestAuditLogImmutability:
 
         # Verify the error is from the trigger
         error_msg = str(exc_info.value).lower()
-        assert "append-only" in error_msg or "trigger" in error_msg or "55000" in error_msg
+        assert (
+            "append-only" in error_msg or "trigger" in error_msg or "55000" in error_msg
+        )
 
         # Rollback the aborted transaction
         await async_db_session.rollback()
@@ -196,22 +219,30 @@ class TestAuditLogImmutability:
         sample_audit_log.action = "ORM_MODIFIED"
 
         # The flush will trigger the trigger
-        with pytest.raises((DBAPIError, OperationalError, ProgrammingError)) as exc_info:
+        with pytest.raises(
+            (DBAPIError, OperationalError, ProgrammingError)
+        ) as exc_info:
             await async_db_session.flush()
 
         error_msg = str(exc_info.value).lower()
-        assert "append-only" in error_msg or "trigger" in error_msg or "55000" in error_msg
+        assert (
+            "append-only" in error_msg or "trigger" in error_msg or "55000" in error_msg
+        )
         # If we get here, the trigger worked - no need to verify state after
 
     async def test_orm_delete_rejected(self, async_db_session, sample_audit_log):
         """ORM DELETE should also be rejected."""
         await async_db_session.delete(sample_audit_log)
 
-        with pytest.raises((DBAPIError, OperationalError, ProgrammingError)) as exc_info:
+        with pytest.raises(
+            (DBAPIError, OperationalError, ProgrammingError)
+        ) as exc_info:
             await async_db_session.flush()
 
         error_msg = str(exc_info.value).lower()
-        assert "append-only" in error_msg or "trigger" in error_msg or "55000" in error_msg
+        assert (
+            "append-only" in error_msg or "trigger" in error_msg or "55000" in error_msg
+        )
         # If we get here, the trigger worked - no need to verify state after
 
     async def test_multiple_inserts_allowed(self, async_db_session, sample_assessment):
