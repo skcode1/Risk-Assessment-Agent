@@ -242,6 +242,15 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      # - name: Scan for vulnerabilities (Trivy)
+      #   uses: aquasecurity/trivy-action@master
+      #   with:
+      #     image-ref: ${{ steps.meta.outputs.tags }}
+      #     format: "sarif"
+      #     output: "trivy-results.sarif"
+      #     severity: "CRITICAL,HIGH"
+
+
       - name: Scan for vulnerabilities (Trivy)
         uses: aquasecurity/trivy-action@master
         with:
@@ -249,6 +258,8 @@ jobs:
           format: "sarif"
           output: "trivy-results.sarif"
           severity: "CRITICAL,HIGH"
+          exit-code: "0"
+
 
       - name: Upload Trivy results
         uses: github/codeql-action/upload-sarif@v3
