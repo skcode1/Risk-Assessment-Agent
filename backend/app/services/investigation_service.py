@@ -1,3 +1,4 @@
+from __future__ import annotations
 import logging
 import time
 from decimal import ROUND_HALF_UP, Decimal
@@ -55,7 +56,7 @@ class InvestigationOrchestrationService:
         self,
         db_session: AsyncSession,
         redis_client: aioredis.Redis | None = None,
-        opensearch_client: AsyncOpenSearch | None = None,
+        opensearch_client: Any | None = None,
         sliding_window_seconds: int = 3600,
     ) -> None:
         self.db = db_session
