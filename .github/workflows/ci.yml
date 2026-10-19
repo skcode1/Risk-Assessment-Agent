@@ -246,7 +246,7 @@ jobs:
       - name: Scan for vulnerabilities (Trivy)
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: ${{ steps.meta.outputs.tags }}
+          image-ref: ${{ fromJSON(steps.meta.outputs.json).tags[0] }}
           format: "sarif"
           output: "trivy-results.sarif"
           severity: "CRITICAL"
@@ -268,6 +268,7 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
+          
   deploy-staging:
     name: Deploy to Staging
     runs-on: ubuntu-latest
