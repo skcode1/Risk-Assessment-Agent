@@ -124,7 +124,7 @@ jobs:
           cd backend
           pytest tests/integration/ -v --no-cov
 
-  security-tests:
+security-tests:
     name: Security Tests
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -164,8 +164,15 @@ jobs:
         run: |
           cd backend
           python -m pip install --upgrade pip
-          pip install --prefer-binary setuptools>=68.0.0 pytest pytest-asyncio
+          pip install --prefer-binary setuptools>=68.0.0 pytest pytest-asyncio alembic
           pip install --prefer-binary -r requirements.txt
+
+      - name: Run database migrations
+        env:
+          DATABASE_URL: "postgresql+asyncpg://postgres:postgres@localhost:5432/risk_engine"
+        run: |
+          cd backend
+          alembic upgrade head
 
       - name: Run security tests
         env:
